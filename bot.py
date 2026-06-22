@@ -1,0 +1,147 @@
+"""Aurora forecast Discord bot for NOAA Ship Fairweather.
+
+- Daily loop  : posts the Kp / aurora *prediction* for the ship's position.
+- Hourly loop : posts *observed* conditions and checks the Kp >= threshold alert.
+- /aurora     : on-demand current conditions for the ship's position.
+- Alert       : @everyone when a new forecast window reaches Kp >= KP_THRESHOLD (deduped).
+
+Persistent process; launched + kept alive by Windows Task Scheduler (see README).
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import time, timezone
+
+import aiohttp
+import discord
+from discord.ext import commands, tasks
+
+import alerts
+import config
+import forecast
+import ship
+import swpc
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("aurora-bot")
+
+intents = discord.Intents.default()  # guilds only; no privileged intents needed
+bot = commands.Bot(command_prefix="!", intents=intents,
+                   allowed_mentions=discord.AllowedMentions.none())
+
+
+async def gather_data():
+    """Fetch ship position + Kp forecast + OVATION concurrently."""
+    async with aiohttp.ClientSession() as s:
+        kp_rows, ov, ship_data = await asyncio.gather(
+            swpc.fetch_kp_forecast(s),
+            swpc.fetch_ovation(s),
+            ship.get_position(),
+        )
+    grid, obs_time, _fc_time = ov
+    return ship_data, kp_rows, grid, obs_time
+
+
+def _channel():
+    ch = bot.get_channel(config.CHANNEL_ID)
+    if ch is None:
+        log.error("channel %s not found / not cached", config.CHANNEL_ID)
+    return ch
+
+
+async def maybe_alert(kp_rows: list[dict]):
+    state = alerts.load_state(config.STATE_PATH)
+    new = alerts.check_kp_alert(kp_rows, state, config.KP_THRESHOLD)
+    if not new:
+        return
+    alerts.save_state(config.STATE_PATH, state)
+    ch = _channel()
+    if ch is None:
+        return
+    lines = "\n".join(f"{r['time_tag']}Z — Kp {r['kp']:g}" for r in new)
+    embed = discord.Embed(
+        title=f"⚡ Aurora alert — forecast Kp ≥ {config.KP_THRESHOLD:g}",
+        description=lines,
+        color=0x9B59B6,
+    )
+    await ch.send(content="@everyone", embed=embed,
+                  allowed_mentions=discord.AllowedMentions(everyone=True))
+    log.info("posted Kp alert for %d window(s)", len(new))
+
+
+@tasks.loop(time=time(hour=config.DAILY_POST_UTC, tzinfo=timezone.utc))
+async def daily_prediction():
+    try:
+        ship_data, kp_rows, grid, obs_time = await gather_data()
+        ch = _channel()
+        if ch:
+            embed = forecast.build_prediction_embed(ship_data, kp_rows, grid, obs_time,
+                                                    config.KP_THRESHOLD)
+            await ch.send(embed=embed)
+            log.info("posted daily prediction")
+        await maybe_alert(kp_rows)
+    except Exception:
+        log.exception("daily_prediction failed")
+
+
+@tasks.loop(hours=1)
+async def hourly_observed():
+    try:
+        ship_data, kp_rows, grid, obs_time = await gather_data()
+        observed = swpc.latest_observed_kp(kp_rows)
+        ch = _channel()
+        if ch:
+            embed = forecast.build_observed_embed(ship_data, observed, grid, obs_time)
+            await ch.send(embed=embed)
+            log.info("posted hourly observed conditions")
+        await maybe_alert(kp_rows)
+    except Exception:
+        log.exception("hourly_observed failed")
+
+
+@bot.tree.command(name="aurora", description="Current aurora odds at NOAA Ship Fairweather's position")
+async def aurora_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=True)
+    try:
+        ship_data, kp_rows, grid, obs_time = await gather_data()
+        observed = swpc.latest_observed_kp(kp_rows)
+        embed = forecast.build_observed_embed(ship_data, observed, grid, obs_time)
+        ge = swpc.predicted_ge(kp_rows, config.KP_THRESHOLD)
+        if ge:
+            nxt = ge[0]
+            embed.add_field(name=f"Next Kp ≥ {config.KP_THRESHOLD:g}",
+                            value=f"{nxt['time_tag']}Z — Kp {nxt['kp']:g}", inline=False)
+        await interaction.followup.send(embed=embed)
+    except Exception:
+        log.exception("/aurora failed")
+        await interaction.followup.send("Could not fetch aurora data right now — try again shortly.")
+
+
+@bot.event
+async def on_ready():
+    log.info("logged in as %s (id %s)", bot.user, bot.user.id if bot.user else "?")
+    try:
+        if config.GUILD_ID:
+            guild = discord.Object(id=config.GUILD_ID)
+            bot.tree.copy_global_to(guild=guild)
+            await bot.tree.sync(guild=guild)
+        else:
+            await bot.tree.sync()
+        log.info("slash commands synced")
+    except Exception:
+        log.exception("command sync failed")
+    if not hourly_observed.is_running():
+        hourly_observed.start()
+    if not daily_prediction.is_running():
+        daily_prediction.start()
+
+
+def main():
+    config.require("DISCORD_TOKEN", config.DISCORD_TOKEN)
+    config.require("CHANNEL_ID", config.CHANNEL_ID)
+    bot.run(config.DISCORD_TOKEN)
+
+
+if __name__ == "__main__":
+    main()

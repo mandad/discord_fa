@@ -1,0 +1,15 @@
+# secrets / runtime state
+.env
+state.json
+
+# fetched at deploy time from the private life-manager repo (not vendored here)
+ship-position.py
+
+# python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# logs
+*.log
