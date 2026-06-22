@@ -89,12 +89,18 @@ async def daily_prediction():
 async def hourly_observed():
     try:
         ship_data, kp_rows, grid, obs_time = await gather_data()
-        observed = swpc.latest_observed_kp(kp_rows)
-        ch = _channel()
-        if ch:
-            embed = forecast.build_observed_embed(ship_data, observed, grid, obs_time)
-            await ch.send(embed=embed)
-            log.info("posted hourly observed conditions")
+        prob = swpc.aurora_prob_at(grid, ship_data.get("lat"), ship_data.get("lon"))
+        # Only post the hourly update when aurora is actually possible at the ship.
+        if prob and prob > 0:
+            ch = _channel()
+            if ch:
+                observed = swpc.latest_observed_kp(kp_rows)
+                embed = forecast.build_observed_embed(ship_data, observed, grid, obs_time)
+                await ch.send(embed=embed)
+                log.info("posted hourly observed conditions (aurora %s%% at ship)", prob)
+        else:
+            log.info("skipped hourly post (aurora %s%% at ship)", prob)
+        # Alert check runs every hour regardless of local aurora probability.
         await maybe_alert(kp_rows)
     except Exception:
         log.exception("hourly_observed failed")
