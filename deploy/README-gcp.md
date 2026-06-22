@@ -4,8 +4,9 @@ Persistent `discord.py` gateway bot → run it on a small always-on VM with syst
 A free-tier **e2-micro** is plenty (Discord traffic is tiny). Outbound only — no inbound
 ports, so no firewall rules needed.
 
-`ship-position.py` lives in your **private** repo `mandad/life-manager`. The VM pulls it with
-**your GitHub auth** (the `gh` CLI), so no copying from your PC.
+The bot code is the **public** repo `mandad/discord_fa` — the VM installs it as a `git`
+checkout and updates with `git pull` (no auth). `ship-position.py` lives in your **private**
+repo `mandad/life-manager`; the VM pulls that one with **your GitHub auth** (`gh` CLI).
 
 ## 1. Create the VM (free-tier eligible region)
 
@@ -20,15 +21,7 @@ gcloud compute ssh aurora-bot --zone=us-central1-a
 (Free tier: one non-preemptible e2-micro/month in `us-west1`, `us-central1`, or `us-east1`,
 ≤30 GB standard PD.)
 
-## 2. Get the bot code onto the VM
-
-`git clone` your bot repo, or copy from your PC:
-```bash
-# from the discord_fa project dir on your PC:
-gcloud compute scp --recurse . aurora-bot:~/discord_fa --zone=us-central1-a
-```
-
-## 3. Authenticate GitHub (to pull ship-position.py from the private repo)
+## 2. Authenticate GitHub (for the private ship-position.py source)
 
 On the VM, do **one** of:
 ```bash
@@ -36,20 +29,22 @@ gh auth login                 # interactive (device code), OR
 export GH_TOKEN=ghp_xxx       # a token with read access to mandad/life-manager
 ```
 A fine-grained, read-only token scoped to just `life-manager` (Contents: Read) is the
-least-privilege option; your existing classic token also works.
+least-privilege option; your existing classic token also works. (The bot repo is public, so
+cloning/updating it needs no auth.)
 
-## 4. Run the one-shot installer
+## 3. Run the one-shot installer
 
+The bot repo is public, so you can run the installer straight from it — no manual clone:
 ```bash
-cd ~/discord_fa
-bash deploy/setup.sh
+curl -fsSL https://raw.githubusercontent.com/mandad/discord_fa/main/deploy/setup.sh | bash
 ```
-`setup.sh` installs deps + `gh`, creates the `aurora` service user, copies the app to
-`/opt/aurora-bot`, **fetches `ship-position.py` via `deploy/fetch-ship-position.sh`** (your gh
-auth), builds the venv, scaffolds `.env` with `SHIP_SCRIPT_PATH` set, and installs+enables the
-systemd unit (it does **not** start the bot yet — no token in `.env` would crash-loop).
+`setup.sh` installs deps + `gh`, creates the `aurora` service user, **`git clone`s
+`mandad/discord_fa` into `/opt/aurora-bot`** (a checkout it can later `git pull`),
+**fetches `ship-position.py` via your gh auth**, builds the venv, scaffolds `.env` with
+`SHIP_SCRIPT_PATH` set, and installs+enables the systemd unit (it does **not** start the bot
+yet — an empty token would crash-loop). Re-running `setup.sh` updates the checkout in place.
 
-## 5. Secrets, smoke test, start
+## 4. Secrets, smoke test, start
 
 ```bash
 sudo -u aurora nano /opt/aurora-bot/.env          # set DISCORD_TOKEN, CHANNEL_ID
@@ -58,6 +53,13 @@ sudo -u aurora /opt/aurora-bot/.venv/bin/python /opt/aurora-bot/ship.py
 sudo systemctl start aurora-bot
 journalctl -u aurora-bot -f                        # expect "logged in as ..." + "commands synced"
 ```
+
+## Updating the bot code (pull from GitHub)
+After you push changes to `mandad/discord_fa`, update the VM:
+```bash
+bash /opt/aurora-bot/deploy/update.sh      # git pull origin/main + sync deps + restart
+```
+The hard reset leaves ignored files (`.env`, `.venv/`, `ship-position.py`, `state.json`) intact.
 
 ## Updating ship-position.py later
 ```bash

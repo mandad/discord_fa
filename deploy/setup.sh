@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
 # One-shot VM install for the aurora bot (Debian/Ubuntu).
-# Run from the checked-out project dir:  bash deploy/setup.sh
+# Installs /opt/aurora-bot as a git checkout of the bot repo so it can `git pull` to update.
+#
+# Run either from a checkout:        bash deploy/setup.sh
+# or straight from the public repo:  curl -fsSL https://raw.githubusercontent.com/mandad/discord_fa/main/deploy/setup.sh | bash
 #
 # Prereqs on the VM:
 #   - You are a sudo-capable user.
-#   - GitHub auth available to fetch ship-position.py from the private repo, i.e. EITHER
+#   - GitHub auth for the PRIVATE ship-position.py source (mandad/life-manager), i.e. EITHER
 #       gh auth login        (interactive), OR
-#       export GH_TOKEN=...   (a token with read access to mandad/life-manager)
-# The bot itself is then run by a dedicated, non-login 'aurora' service user via systemd.
+#       export GH_TOKEN=...   (token with read access to mandad/life-manager)
+#   (The bot repo itself is public, so cloning/updating it needs no auth.)
 set -euo pipefail
 
 APP_DIR=/opt/aurora-bot
 APP_USER=aurora
-SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # project root (parent of deploy/)
+BOT_REPO="${BOT_REPO:-https://github.com/mandad/discord_fa.git}"
+BOT_REF="${BOT_REF:-main}"
 
-echo "==> [1/6] system packages (python venv, gh, git, curl)"
+echo "==> [1/6] system packages (python venv, git, gh, curl)"
 sudo apt-get update -qq
 if ! command -v gh >/dev/null 2>&1; then
-  # GitHub CLI apt repo
   sudo mkdir -p -m 755 /etc/apt/keyrings
   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
@@ -26,16 +29,22 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 sudo apt-get install -y python3-venv python3-full git curl gh
 
-echo "==> [2/6] service user + app dir"
+echo "==> [2/6] service user + clone bot repo from $BOT_REPO ($BOT_REF)"
 id "$APP_USER" &>/dev/null || sudo useradd -r -m -d "$APP_DIR" "$APP_USER"
-sudo mkdir -p "$APP_DIR"
-sudo cp -r "$SRC_DIR"/. "$APP_DIR"/
-sudo chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+if [ -d "$APP_DIR/.git" ]; then
+  echo "    existing checkout -> updating to origin/$BOT_REF"
+  sudo -u "$APP_USER" git -C "$APP_DIR" fetch --depth 1 origin "$BOT_REF"
+  sudo -u "$APP_USER" git -C "$APP_DIR" reset --hard "origin/$BOT_REF"
+else
+  sudo rm -rf "$APP_DIR"
+  sudo git clone --depth 1 -b "$BOT_REF" "$BOT_REPO" "$APP_DIR"
+  sudo chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+fi
 
 echo "==> [3/6] fetch ship-position.py via GitHub auth (your gh login / GH_TOKEN)"
-# Run as the invoking user so it uses YOUR gh auth, then place + chown to the service user.
+# Runs as the invoking user (uses YOUR gh auth), then placed + chowned to the service user.
 TMP_SHIP="$(mktemp)"
-bash "$SRC_DIR/deploy/fetch-ship-position.sh" "$TMP_SHIP"
+bash "$APP_DIR/deploy/fetch-ship-position.sh" "$TMP_SHIP"
 sudo cp "$TMP_SHIP" "$APP_DIR/ship-position.py"
 sudo chown "$APP_USER:$APP_USER" "$APP_DIR/ship-position.py"
 rm -f "$TMP_SHIP"
@@ -48,7 +57,6 @@ echo "==> [5/6] .env scaffold"
 if [ ! -f "$APP_DIR/.env" ]; then
   sudo -u "$APP_USER" cp "$APP_DIR/.env.example" "$APP_DIR/.env"
 fi
-# point the bot at the fetched script (idempotent)
 if ! sudo grep -q '^SHIP_SCRIPT_PATH=' "$APP_DIR/.env"; then
   echo "SHIP_SCRIPT_PATH=$APP_DIR/ship-position.py" | sudo tee -a "$APP_DIR/.env" >/dev/null
 fi
@@ -69,6 +77,6 @@ Done. Final steps:
   3. Start:          sudo systemctl start aurora-bot
   4. Logs:           journalctl -u aurora-bot -f     # expect "logged in as ..." + "commands synced"
 
-To refresh ship-position.py later:
-  bash $APP_DIR/deploy/fetch-ship-position.sh /tmp/sp.py && sudo cp /tmp/sp.py $APP_DIR/ship-position.py && sudo systemctl restart aurora-bot
+Update the bot later (pull latest from GitHub + restart):
+  bash $APP_DIR/deploy/update.sh
 EOF
