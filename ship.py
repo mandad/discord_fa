@@ -13,12 +13,18 @@ import config
 
 
 async def get_position(script_path: str = config.SHIP_SCRIPT_PATH,
-                       ship_name: str = config.SHIP_NAME) -> dict:
+                       ship_name: str = config.SHIP_NAME,
+                       timeout: float = 60.0) -> dict:
     proc = await asyncio.create_subprocess_exec(
         "python3", script_path, "--json", "--ship-name", ship_name,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
-    out, err = await proc.communicate()
+    try:
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()  # reap the killed process
+        raise RuntimeError(f"ship-position.py timed out after {timeout:.0f}s")
     if proc.returncode != 0:
         raise RuntimeError(f"ship-position.py failed (rc={proc.returncode}): {err.decode().strip()}")
     try:

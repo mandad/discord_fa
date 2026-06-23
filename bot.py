@@ -135,9 +135,20 @@ async def aurora_cmd(interaction: discord.Interaction):
         await interaction.followup.send("Could not fetch aurora data right now — try again shortly.")
 
 
+async def _wait_until_ready():
+    # Loops start in setup_hook (before the gateway is up); hold each first iteration until the
+    # connection + cache are ready so channel lookups succeed.
+    await bot.wait_until_ready()
+
+
+hourly_observed.before_loop(_wait_until_ready)
+daily_prediction.before_loop(_wait_until_ready)
+
+
 @bot.event
-async def on_ready():
-    log.info("logged in as %s (id %s)", bot.user, bot.user.id if bot.user else "?")
+async def setup_hook():
+    # Runs ONCE at startup (not on every gateway reconnect), so command sync + loop start are
+    # not repeated when the websocket drops and discord.py auto-reconnects.
     try:
         if config.GUILD_ID:
             guild = discord.Object(id=config.GUILD_ID)
@@ -152,6 +163,12 @@ async def on_ready():
         hourly_observed.start()
     if not daily_prediction.is_running():
         daily_prediction.start()
+
+
+@bot.event
+async def on_ready():
+    # Fires on initial connect AND after every reconnect — keep it cheap (no API calls here).
+    log.info("ready as %s (id %s)", bot.user, bot.user.id if bot.user else "?")
 
 
 def main():
