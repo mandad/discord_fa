@@ -21,6 +21,8 @@ SHIP_SCRIPT_PATH = os.environ.get(
 )
 SHIP_NAME = os.environ.get("SHIP_NAME", "FAIRWEATHER")
 KP_THRESHOLD = float(os.environ.get("KP_THRESHOLD", "4"))
+# Minimum OVATION aurora visibility (%) at the ship for the hourly post to publish.
+MIN_AURORA_PCT = float(os.environ.get("MIN_AURORA_PCT", "1"))
 DAILY_POST_UTC = int(os.environ.get("DAILY_POST_UTC", "18"))  # hour (UTC) for the daily prediction
 # Restrict slash-command sync to one guild for instant availability (optional).
 GUILD_ID = int(os.environ.get("GUILD_ID", "0") or "0")

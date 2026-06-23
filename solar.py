@@ -29,8 +29,14 @@ DEFAULT_TZ_NAME = "America/Anchorage"  # Alaska; assumed at sea / when position 
 
 
 def parse_swpc(time_tag: str) -> datetime:
-    """SWPC time_tag like '2026-06-20T03:00:00' (UTC) -> aware UTC datetime."""
-    return datetime.fromisoformat(time_tag).replace(tzinfo=timezone.utc)
+    """SWPC time like '2026-06-20T03:00:00' or '...Z' (UTC) -> aware UTC datetime."""
+    return datetime.fromisoformat(time_tag.replace("Z", "")).replace(tzinfo=timezone.utc)
+
+
+def local_str(iso: str, lat, lon, fmt: str = "%a %H:%M %Z") -> str:
+    """Format any UTC ISO timestamp in the ship's local civil time, e.g. 'Sat 19:00 AKDT'."""
+    loc, _ = to_local(parse_swpc(iso), lat, lon)
+    return loc.strftime(fmt)
 
 
 def _julian(dt: datetime) -> float:

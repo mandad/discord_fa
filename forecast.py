@@ -63,10 +63,11 @@ def build_observed_embed(ship: dict, observed_kp, grid: dict, obs_time) -> disco
     )
     e.add_field(name="Aurora at ship", value=f"{prob}% visible" if prob is not None else "n/a", inline=True)
     if observed_kp:
-        e.add_field(name="Kp (observed)", value=f"{kp:g} @ {observed_kp['time_tag']}Z", inline=True)
+        e.add_field(name="Kp (observed)",
+                    value=f"{kp:g} @ {solar.local_str(observed_kp['time_tag'], lat, lon)}", inline=True)
     e.add_field(name="Outlook", value=viewing_assessment(prob, kp), inline=False)
     if obs_time:
-        e.set_footer(text=f"OVATION obs {obs_time} · source: NOAA SWPC + mfphub AIS")
+        e.set_footer(text=f"OVATION obs {solar.local_str(obs_time, lat, lon)} · source: NOAA SWPC + mfphub AIS")
     return e
 
 
@@ -91,5 +92,5 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
         e.add_field(name=f"⚡ Forecast Kp ≥ {threshold:g}", value=ge_txt, inline=False)
     e.add_field(name="Outlook", value=viewing_assessment(prob, top_kp), inline=False)
     if obs_time:
-        e.set_footer(text=f"OVATION obs {obs_time} · source: NOAA SWPC + mfphub AIS")
+        e.set_footer(text=f"OVATION obs {solar.local_str(obs_time, lat, lon)} · source: NOAA SWPC + mfphub AIS")
     return e

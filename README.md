@@ -7,8 +7,9 @@ for that position, pinging **@everyone** whenever the forecast planetary **Kp in
   with each window timestamped in UTC **and** ship-local time. Local time uses the ship's actual
   civil timezone (via `timezonefinder`, DST-aware), defaulting to Alaska (`America/Anchorage`)
   over open ocean or when no position is available.
-- **Hourly** post: *observed* conditions (current aurora % at the ship + observed Kp). Posts only
-  when aurora chance at the ship is > 0%. Omits SOG/COG (unreliable while stationary).
+- **Hourly** post: *observed* conditions (current aurora % at the ship + observed Kp), times in
+  ship-local time. Posts only when aurora chance at the ship is ≥ `MIN_AURORA_PCT` (default 1%).
+  Omits SOG/COG (unreliable while stationary).
 - **`/aurora`** slash command: current conditions on demand.
 - **Alert**: `@everyone` on each new forecast window with Kp ≥ `KP_THRESHOLD`, **but only if the
   sky at the ship is darker than nautical twilight** (sun below −12°) at that time — so daylight
