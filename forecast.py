@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import discord
 
+import solar
 import swpc
 
 
-def _pos_line(ship: dict) -> str:
+def _pos_line(ship: dict, include_motion: bool = True) -> str:
     lat, lon = ship.get("lat"), ship.get("lon")
     line = f"**{lat:.3f}, {lon:.3f}**" if lat is not None and lon is not None else "position unknown"
     age = ship.get("_age_hours")
@@ -14,12 +15,13 @@ def _pos_line(ship: dict) -> str:
         line += f" · fix {age:.1f}h old"
     if ship.get("_stale"):
         line += " ⚠️ STALE (pusher may be down / ship off-network)"
-    bits = []
-    for k, label, unit in (("sog_kt", "SOG", " kt"), ("cog", "COG", "°")):
-        if ship.get(k) is not None:
-            bits.append(f"{label} {ship[k]}{unit}")
-    if bits:
-        line += " · " + " · ".join(bits)
+    if include_motion:
+        # SOG/COG are unreliable while stationary, so callers can omit them.
+        bits = [f"{label} {ship[k]}{unit}"
+                for k, label, unit in (("sog_kt", "SOG", " kt"), ("cog", "COG", "°"))
+                if ship.get(k) is not None]
+        if bits:
+            line += " · " + " · ".join(bits)
     return line
 
 
@@ -56,7 +58,7 @@ def build_observed_embed(ship: dict, observed_kp, grid: dict, obs_time) -> disco
     kp = observed_kp["kp"] if observed_kp else None
     e = discord.Embed(
         title="🛰️ Aurora — observed conditions",
-        description=_pos_line(ship),
+        description=_pos_line(ship, include_motion=False),
         color=_color(prob, kp),
     )
     e.add_field(name="Aurora at ship", value=f"{prob}% visible" if prob is not None else "n/a", inline=True)
@@ -81,11 +83,11 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
     )
     e.add_field(name="Aurora at ship now", value=f"{prob}% visible" if prob is not None else "n/a", inline=True)
     if peaks:
-        peak_txt = "\n".join(f"{p['time_tag']}Z — Kp {p['kp']:g}" for p in peaks)
+        peak_txt = "\n".join(f"Kp {p['kp']:g} — {solar.window_label(p['time_tag'], lon)}" for p in peaks)
         e.add_field(name="Predicted Kp peaks (3-day)", value=peak_txt, inline=False)
     ge = swpc.predicted_ge(kp_rows, threshold)
     if ge:
-        ge_txt = "\n".join(f"{r['time_tag']}Z — Kp {r['kp']:g}" for r in ge)
+        ge_txt = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lon)}" for r in ge)
         e.add_field(name=f"⚡ Forecast Kp ≥ {threshold:g}", value=ge_txt, inline=False)
     e.add_field(name="Outlook", value=viewing_assessment(prob, top_kp), inline=False)
     if obs_time:

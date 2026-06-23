@@ -22,13 +22,17 @@ def save_state(path: Path, state: dict) -> None:
     Path(path).write_text(json.dumps(state, indent=2))
 
 
-def check_kp_alert(rows: list[dict], state: dict, threshold: float) -> list[dict]:
+def check_kp_alert(rows: list[dict], state: dict, threshold: float, keep=None) -> list[dict]:
     """Return predicted windows newly at/above threshold; mutate `state` to record them.
 
-    Caller is responsible for persisting `state` (save_state) after acting on the result.
+    `keep`, if given, is a predicate `keep(row) -> bool`; rows it rejects (e.g. windows that
+    fall in daylight at the ship) are skipped and not recorded, so they can be reconsidered
+    later. Caller persists `state` (save_state) after acting on the result.
     """
     new = []
     for r in swpc.predicted_ge(rows, threshold):
+        if keep is not None and not keep(r):
+            continue
         prev = state.get(r["time_tag"])
         if prev is None or r["kp"] > prev:
             new.append(r)

@@ -21,6 +21,7 @@ import alerts
 import config
 import forecast
 import ship
+import solar
 import swpc
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -50,18 +51,27 @@ def _channel():
     return ch
 
 
-async def maybe_alert(kp_rows: list[dict]):
+async def maybe_alert(kp_rows: list[dict], ship_data: dict):
+    lat, lon = ship_data.get("lat"), ship_data.get("lon")
+
+    def dark_enough(r: dict) -> bool:
+        # Only alert windows when the sky at the ship is darker than nautical twilight;
+        # if position is unknown, don't suppress.
+        if lat is None or lon is None:
+            return True
+        return solar.is_dark_nautical(lat, lon, solar.parse_swpc(r["time_tag"]))
+
     state = alerts.load_state(config.STATE_PATH)
-    new = alerts.check_kp_alert(kp_rows, state, config.KP_THRESHOLD)
+    new = alerts.check_kp_alert(kp_rows, state, config.KP_THRESHOLD, keep=dark_enough)
     if not new:
         return
     alerts.save_state(config.STATE_PATH, state)
     ch = _channel()
     if ch is None:
         return
-    lines = "\n".join(f"{r['time_tag']}Z — Kp {r['kp']:g}" for r in new)
+    lines = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lon)}" for r in new)
     embed = discord.Embed(
-        title=f"⚡ Aurora alert — forecast Kp ≥ {config.KP_THRESHOLD:g}",
+        title=f"⚡ Aurora alert — forecast Kp ≥ {config.KP_THRESHOLD:g} (dark at ship)",
         description=lines,
         color=0x9B59B6,
     )
@@ -80,7 +90,7 @@ async def daily_prediction():
                                                     config.KP_THRESHOLD)
             await ch.send(embed=embed)
             log.info("posted daily prediction")
-        await maybe_alert(kp_rows)
+        await maybe_alert(kp_rows, ship_data)
     except Exception:
         log.exception("daily_prediction failed")
 
@@ -101,7 +111,7 @@ async def hourly_observed():
         else:
             log.info("skipped hourly post (aurora %s%% at ship)", prob)
         # Alert check runs every hour regardless of local aurora probability.
-        await maybe_alert(kp_rows)
+        await maybe_alert(kp_rows, ship_data)
     except Exception:
         log.exception("hourly_observed failed")
 
@@ -117,7 +127,8 @@ async def aurora_cmd(interaction: discord.Interaction):
         if ge:
             nxt = ge[0]
             embed.add_field(name=f"Next Kp ≥ {config.KP_THRESHOLD:g}",
-                            value=f"{nxt['time_tag']}Z — Kp {nxt['kp']:g}", inline=False)
+                            value=f"Kp {nxt['kp']:g} — {solar.window_label(nxt['time_tag'], ship_data.get('lon'))}",
+                            inline=False)
         await interaction.followup.send(embed=embed)
     except Exception:
         log.exception("/aurora failed")
