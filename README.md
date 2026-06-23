@@ -14,8 +14,9 @@ for that position, pinging **@everyone** whenever the forecast planetary **Kp in
 - **Alert**: `@everyone` on each new forecast window with Kp ≥ `KP_THRESHOLD`, **but only if the
   sky at the ship is darker than nautical twilight** (sun below −12°) at that time — so daylight
   windows (e.g. high-latitude summer) don't ping. Deduped per window; times shown UTC + local.
-  Each alert embeds the **UAF Geophysical Institute Alaska viewline diagram** for that Kp and a
-  cross-reference of our SWPC forecast vs GI's daily forecast.
+  Each alert embeds the **UAF Geophysical Institute Alaska viewline diagram** for that Kp, the
+  **NOAA SWPC predicted viewline** images (tonight + tomorrow night), and a cross-reference of
+  our SWPC forecast vs GI's 3-day forecast.
 - **Cross-reference**: the daily prediction and alerts compare our SWPC Kp against the University
   of Alaska Geophysical Institute forecast and link the GI page.
 
@@ -25,7 +26,8 @@ for that position, pinging **@everyone** whenever the forecast planetary **Kp in
 |------|--------|
 | Ship position | `ship-position.py` → public mfphub AIS feed (no secret) |
 | Kp forecast | `services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json` |
-| GI forecast + viewline | `gi.alaska.edu/monitors/aurora-forecast` (daily Kp JSON + `idl_graphics/ak/Alaska_{Kp}.png`) |
+| GI forecast + viewline | `gi.alaska.edu/monitors/aurora-forecast` (3-day Kp JSON + `idl_graphics/ak/Alaska_{Kp}.png`) |
+| NOAA predicted viewline | `services.swpc.noaa.gov/experimental/images/aurora_dashboard/{tonights,tomorrow_nights}_static_viewline_forecast.png` |
 | Aurora nowcast | `services.swpc.noaa.gov/json/ovation_aurora_latest.json` (OVATION, % visible per 1° cell) |
 
 ## Setup

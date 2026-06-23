@@ -73,7 +73,8 @@ async def maybe_alert(kp_rows: list[dict], ship_data: dict):
     async with aiohttp.ClientSession() as s:
         gi_daily = await gi.fetch_daily(s)  # best-effort; {} on failure
     embed = forecast.build_alert_embed(new, ship_data, kp_rows, gi_daily, config.KP_THRESHOLD)
-    await ch.send(content="@everyone", embed=embed,
+    embeds = [embed, *forecast.noaa_viewline_embeds()]  # GI Alaska viewline + NOAA tonight/tomorrow
+    await ch.send(content="@everyone", embeds=embeds,
                   allowed_mentions=discord.AllowedMentions(everyone=True))
     log.info("posted Kp alert for %d window(s)", len(new))
 

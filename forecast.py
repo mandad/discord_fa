@@ -131,3 +131,14 @@ def build_alert_embed(new_windows: list[dict], ship: dict, kp_rows: list[dict],
     e.set_image(url=gi.viewline_url(peak_kp))
     e.set_footer(text=f"Viewline: UAF Geophysical Institute (Alaska, Kp {peak_kp})")
     return e
+
+
+def noaa_viewline_embeds() -> list[discord.Embed]:
+    """NOAA SWPC static predicted-viewline images (tonight + tomorrow night) as image embeds."""
+    out = []
+    for label, url in swpc.NOAA_VIEWLINE.items():
+        e = discord.Embed(title=f"NOAA predicted viewline — {label}",
+                          url=swpc.NOAA_VIEWLINE_PAGE, color=0x3498DB)
+        e.set_image(url=url)
+        out.append(e)
+    return out

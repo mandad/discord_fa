@@ -15,6 +15,13 @@ KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecas
 OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 HEADERS = {"User-Agent": "aurora-fairweather-bot/1.0"}
 
+# NOAA SWPC experimental static viewline forecast (OVATION driven by the 3-day Kp forecast).
+NOAA_VIEWLINE_PAGE = "https://www.spaceweather.gov/products/aurora-viewline-tonight-and-tomorrow-night-experimental"
+NOAA_VIEWLINE = {
+    "tonight": "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png",
+    "tomorrow night": "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png",
+}
+
 
 async def _fetch_json(session: aiohttp.ClientSession, url: str):
     async with session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=30)) as r:

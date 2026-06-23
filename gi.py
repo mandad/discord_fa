@@ -19,8 +19,9 @@ GI_URL = "https://www.gi.alaska.edu/monitors/aurora-forecast"
 _IMG_BASE = "https://www.gi.alaska.edu/modules/custom/aurora-forecast/images/idl_graphics"
 HEADERS = {"User-Agent": "aurora-fairweather-bot/1.0 (+discord)"}
 
-# first embedded array of daily {"predicted_time":"YYYY-MM-DD","kp":"N"} objects
-_DAILY_RE = re.compile(r'\[\{"predicted_time":"\d{4}-\d{2}-\d{2}".*?\}\]')
+# The page hides several forecast arrays in <p id="db-data-*"> tags. We want the 3-day NOAA
+# geomagnetic forecast (3-hourly, id=db-data-3-day) and the longer 27-day outlook as fallback.
+_BLOCK_RE = re.compile(r'id="(db-data-3-day|db-data-27-day)"[^>]*>(\[.*?\])', re.S)
 
 
 def viewline_url(kp, region_dir: str = "ak", region_name: str = "Alaska") -> str:
@@ -29,19 +30,37 @@ def viewline_url(kp, region_dir: str = "ak", region_name: str = "Alaska") -> str
     return f"{_IMG_BASE}/{region_dir}/{region_name}_{n}.png"
 
 
+def _loads(s):
+    try:
+        return json.loads(s) if s else []
+    except Exception:
+        return []
+
+
 async def fetch_daily(session: aiohttp.ClientSession) -> dict[str, int]:
-    """Return GI's daily Kp forecast as {'YYYY-MM-DD': kp_int}. Best-effort: {} on any failure."""
+    """Return GI's forecast Kp as {'YYYY-MM-DD': kp_int}. Best-effort: {} on any failure.
+
+    The 3-day forecast is 3-hourly; we take each day's max Kp, which is what GI shows as that
+    day's value (and what selects its viewline map). The 27-day outlook fills later dates.
+    """
     try:
         async with session.get(GI_URL, headers=HEADERS,
                                timeout=aiohttp.ClientTimeout(total=30)) as r:
             r.raise_for_status()
             html = await r.text()
-        m = _DAILY_RE.search(html)
-        if not m:
-            return {}
-        return {row["predicted_time"]: int(row["kp"]) for row in json.loads(m.group(0))}
     except Exception:
         return {}
+    blocks = dict(_BLOCK_RE.findall(html))
+    daily: dict[str, int] = {}
+    for row in _loads(blocks.get("db-data-27-day")):       # longer range, lower priority
+        daily[row["predicted_time"][:10]] = int(round(float(row["kp"])))
+    threeday: dict[str, float] = {}
+    for row in _loads(blocks.get("db-data-3-day")):        # near term, day's max Kp
+        d = row["predicted_time"][:10]
+        threeday[d] = max(threeday.get(d, 0.0), float(row["kp"]))
+    for d, k in threeday.items():
+        daily[d] = int(round(k))
+    return daily
 
 
 if __name__ == "__main__":  # smoke test
