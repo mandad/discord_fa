@@ -20,6 +20,7 @@ from discord.ext import commands, tasks
 import alerts
 import config
 import forecast
+import gi
 import ship
 import solar
 import swpc
@@ -69,12 +70,9 @@ async def maybe_alert(kp_rows: list[dict], ship_data: dict):
     ch = _channel()
     if ch is None:
         return
-    lines = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lat, lon)}" for r in new)
-    embed = discord.Embed(
-        title=f"⚡ Aurora alert — forecast Kp ≥ {config.KP_THRESHOLD:g} (dark at ship)",
-        description=lines,
-        color=0x9B59B6,
-    )
+    async with aiohttp.ClientSession() as s:
+        gi_daily = await gi.fetch_daily(s)  # best-effort; {} on failure
+    embed = forecast.build_alert_embed(new, ship_data, kp_rows, gi_daily, config.KP_THRESHOLD)
     await ch.send(content="@everyone", embed=embed,
                   allowed_mentions=discord.AllowedMentions(everyone=True))
     log.info("posted Kp alert for %d window(s)", len(new))
@@ -86,8 +84,10 @@ async def daily_prediction():
         ship_data, kp_rows, grid, obs_time = await gather_data()
         ch = _channel()
         if ch:
+            async with aiohttp.ClientSession() as s:
+                gi_daily = await gi.fetch_daily(s)  # best-effort; {} on failure
             embed = forecast.build_prediction_embed(ship_data, kp_rows, grid, obs_time,
-                                                    config.KP_THRESHOLD)
+                                                    config.KP_THRESHOLD, gi_daily=gi_daily)
             await ch.send(embed=embed)
             log.info("posted daily prediction")
         await maybe_alert(kp_rows, ship_data)

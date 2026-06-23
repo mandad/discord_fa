@@ -3,8 +3,22 @@ from __future__ import annotations
 
 import discord
 
+import gi
 import solar
 import swpc
+
+
+def _crossref_value(kp_rows: list[dict], gi_daily: dict | None, dates) -> str:
+    """Per-date 'ours vs UAF GI' Kp comparison plus a link to the GI forecast/viewline page."""
+    lines = []
+    for d in sorted(set(dates)):
+        ours = max((r["kp"] for r in kp_rows if r["time_tag"][:10] == d), default=None)
+        g = (gi_daily or {}).get(d)
+        g_txt = f"Kp {g}" if g is not None else "Kp —"
+        lines.append(f"{d}: ours Kp {ours:g} · GI {g_txt}" if ours is not None
+                     else f"{d}: GI {g_txt}")
+    lines.append(f"[GI forecast & viewline]({gi.GI_URL})")
+    return "\n".join(lines)
 
 
 def _pos_line(ship: dict, include_motion: bool = True) -> str:
@@ -72,7 +86,7 @@ def build_observed_embed(ship: dict, observed_kp, grid: dict, obs_time) -> disco
 
 
 def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time,
-                           threshold: float) -> discord.Embed:
+                           threshold: float, gi_daily: dict | None = None) -> discord.Embed:
     lat, lon = ship.get("lat"), ship.get("lon")
     prob = swpc.aurora_prob_at(grid, lat, lon)
     peaks = swpc.predicted_peaks(kp_rows, top=3)
@@ -91,6 +105,29 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
         ge_txt = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lat, lon)}" for r in ge)
         e.add_field(name=f"⚡ Forecast Kp ≥ {threshold:g}", value=ge_txt, inline=False)
     e.add_field(name="Outlook", value=viewing_assessment(prob, top_kp), inline=False)
+    xref_dates = [r["time_tag"][:10] for r in ge] or [p["time_tag"][:10] for p in peaks[:1]]
+    e.add_field(name="🔭 UAF GI cross-reference",
+                value=_crossref_value(kp_rows, gi_daily, xref_dates), inline=False)
     if obs_time:
         e.set_footer(text=f"OVATION obs {solar.local_str(obs_time, lat, lon)} · source: NOAA SWPC + mfphub AIS")
+    return e
+
+
+def build_alert_embed(new_windows: list[dict], ship: dict, kp_rows: list[dict],
+                      gi_daily: dict | None, threshold: float) -> discord.Embed:
+    """Kp alert embed: window list, UAF GI cross-reference, and the GI Alaska viewline map."""
+    lat, lon = ship.get("lat"), ship.get("lon")
+    lines = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lat, lon)}"
+                      for r in new_windows)
+    e = discord.Embed(
+        title=f"⚡ Aurora alert — forecast Kp ≥ {threshold:g} (dark at ship)",
+        description=lines,
+        color=0x9B59B6,
+    )
+    e.add_field(name="🔭 UAF GI cross-reference",
+                value=_crossref_value(kp_rows, gi_daily, [r["time_tag"][:10] for r in new_windows]),
+                inline=False)
+    peak_kp = max(int(round(r["kp"])) for r in new_windows)
+    e.set_image(url=gi.viewline_url(peak_kp))
+    e.set_footer(text=f"Viewline: UAF Geophysical Institute (Alaska, Kp {peak_kp})")
     return e
