@@ -4,7 +4,9 @@ Discord bot that tracks the live position of NOAA Ship Fairweather and posts aur
 for that position, pinging **@everyone** whenever the forecast planetary **Kp index reaches ≥ 4**.
 
 - **Daily** post: the Kp / aurora *prediction* (3-day predicted Kp peaks + aurora % at the ship),
-  with each window timestamped in UTC **and** ship-local time.
+  with each window timestamped in UTC **and** ship-local time. Local time uses the ship's actual
+  civil timezone (via `timezonefinder`, DST-aware), defaulting to Alaska (`America/Anchorage`)
+  over open ocean or when no position is available.
 - **Hourly** post: *observed* conditions (current aurora % at the ship + observed Kp). Posts only
   when aurora chance at the ship is > 0%. Omits SOG/COG (unreliable while stationary).
 - **`/aurora`** slash command: current conditions on demand.

@@ -69,7 +69,7 @@ async def maybe_alert(kp_rows: list[dict], ship_data: dict):
     ch = _channel()
     if ch is None:
         return
-    lines = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lon)}" for r in new)
+    lines = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lat, lon)}" for r in new)
     embed = discord.Embed(
         title=f"⚡ Aurora alert — forecast Kp ≥ {config.KP_THRESHOLD:g} (dark at ship)",
         description=lines,
@@ -127,7 +127,7 @@ async def aurora_cmd(interaction: discord.Interaction):
         if ge:
             nxt = ge[0]
             embed.add_field(name=f"Next Kp ≥ {config.KP_THRESHOLD:g}",
-                            value=f"Kp {nxt['kp']:g} — {solar.window_label(nxt['time_tag'], ship_data.get('lon'))}",
+                            value=f"Kp {nxt['kp']:g} — {solar.window_label(nxt['time_tag'], ship_data.get('lat'), ship_data.get('lon'))}",
                             inline=False)
         await interaction.followup.send(embed=embed)
     except Exception:

@@ -1,3 +1,5 @@
 discord.py>=2.3
 aiohttp>=3.9
 python-dotenv>=1.0
+timezonefinder>=6.5
+tzdata>=2024.1

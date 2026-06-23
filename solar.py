@@ -1,20 +1,31 @@
-"""Sun altitude + ship-local time — dependency-free.
+"""Sun altitude + ship-local time.
 
 Used to (a) gate Kp alerts on darkness (aurora needs the sky darker than nautical twilight,
 i.e. sun altitude < -12 deg) and (b) show a forecast window's time in ship-local terms.
 
-Local time at sea is taken from longitude (nautical zone time, offset = round(lon/15)),
-which is the right notion for a ship in open water and needs no timezone database.
+Ship-local time uses the actual civil timezone at the ship's position (timezonefinder ->
+zoneinfo, so DST like AKDT/AKST is handled). Over open ocean (where there is no land
+timezone) or when no position is available, it falls back to Alaska time (America/Anchorage) —
+NOAA Ship Fairweather is an Alaska survey ship.
 
 The solar position is the standard low-precision NOAA algorithm (~0.01 deg), far more than
 enough for twilight gating.
 """
 from __future__ import annotations
 
+import functools
 import math
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+try:
+    from timezonefinder import TimezoneFinder
+    _TF = TimezoneFinder()
+except Exception:  # pragma: no cover - lib/data missing
+    _TF = None
 
 NAUTICAL_TWILIGHT_ALT = -12.0  # deg; sky is "darker than nautical twilight" below this
+DEFAULT_TZ_NAME = "America/Anchorage"  # Alaska; assumed at sea / when position is unknown
 
 
 def parse_swpc(time_tag: str) -> datetime:
@@ -56,18 +67,40 @@ def is_dark_nautical(lat: float, lon: float, dt: datetime) -> bool:
     return sun_altitude(lat, lon, dt) < NAUTICAL_TWILIGHT_ALT
 
 
-def to_local(dt_utc: datetime, lon: float):
-    """Return (local_datetime, integer_offset_hours) using nautical zone time from longitude."""
-    off = round(lon / 15)
-    return dt_utc + timedelta(hours=off), off
+@functools.lru_cache(maxsize=64)
+def _zone(name: str) -> ZoneInfo:
+    return ZoneInfo(name)
 
 
-def window_label(time_tag: str, lon) -> str:
-    """'2026-06-20T03:00:00Z · Sat 16:00 ship-local (UTC-11)'. UTC-only if lon is None."""
-    if lon is None:
-        return f"{time_tag}Z"
-    loc, off = to_local(parse_swpc(time_tag), lon)
-    return f"{time_tag}Z · {loc:%a %H:%M} ship-local (UTC{off:+d})"
+def ship_tz(lat, lon) -> ZoneInfo:
+    """Civil timezone at the ship. Falls back to Alaska over open ocean / when position unknown.
+
+    timezonefinder returns ``Etc/GMT*`` (pure longitude zones) over open water; those are not a
+    real civil timezone, so we treat them — and any miss — as Alaska time.
+    """
+    if _TF is not None and lat is not None and lon is not None:
+        try:
+            name = _TF.timezone_at(lat=lat, lng=lon)
+        except Exception:
+            name = None
+        if name and not name.startswith("Etc/"):
+            try:
+                return _zone(name)
+            except Exception:
+                pass
+    return _zone(DEFAULT_TZ_NAME)
+
+
+def to_local(dt_utc: datetime, lat, lon):
+    """Return (local_datetime, tz_abbreviation) in the ship's civil timezone."""
+    loc = dt_utc.astimezone(ship_tz(lat, lon))
+    return loc, loc.strftime("%Z")
+
+
+def window_label(time_tag: str, lat, lon) -> str:
+    """'2026-06-20T03:00:00Z · Sat 08:00 AKDT'."""
+    loc, tzabbr = to_local(parse_swpc(time_tag), lat, lon)
+    return f"{time_tag}Z · {loc:%a %H:%M} {tzabbr}"
 
 
 if __name__ == "__main__":  # smoke test
@@ -76,9 +109,9 @@ if __name__ == "__main__":  # smoke test
     for h in (3, 9, 12, 15, 21):
         dt = datetime(2026, 6, 22, h, 0, tzinfo=timezone.utc)
         alt = sun_altitude(lat, lon, dt)
-        loc, off = to_local(dt, lon)
+        loc, tzabbr = to_local(dt, lat, lon)
         print(f"{dt:%Y-%m-%d %H:%M}Z  alt={alt:6.1f}deg  dark={alt < NAUTICAL_TWILIGHT_ALT!s:5}  "
-              f"local={loc:%a %H:%M} (UTC{off:+d})")
+              f"local={loc:%a %H:%M} {tzabbr}")
     # Sanity: London local noon should be high; midnight negative.
     for h in (0, 12):
         dt = datetime(2026, 3, 20, h, tzinfo=timezone.utc)

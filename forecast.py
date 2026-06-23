@@ -83,11 +83,11 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
     )
     e.add_field(name="Aurora at ship now", value=f"{prob}% visible" if prob is not None else "n/a", inline=True)
     if peaks:
-        peak_txt = "\n".join(f"Kp {p['kp']:g} — {solar.window_label(p['time_tag'], lon)}" for p in peaks)
+        peak_txt = "\n".join(f"Kp {p['kp']:g} — {solar.window_label(p['time_tag'], lat, lon)}" for p in peaks)
         e.add_field(name="Predicted Kp peaks (3-day)", value=peak_txt, inline=False)
     ge = swpc.predicted_ge(kp_rows, threshold)
     if ge:
-        ge_txt = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lon)}" for r in ge)
+        ge_txt = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lat, lon)}" for r in ge)
         e.add_field(name=f"⚡ Forecast Kp ≥ {threshold:g}", value=ge_txt, inline=False)
     e.add_field(name="Outlook", value=viewing_assessment(prob, top_kp), inline=False)
     if obs_time:
