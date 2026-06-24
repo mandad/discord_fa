@@ -39,6 +39,17 @@ def test_alert_embed_image_crossref_footer(ship, kp_rows):
     assert any("cross-reference" in f.name.lower() for f in e.fields)
 
 
+def test_next_window_line_with_window(ship, kp_rows):
+    line = forecast.next_window_line(kp_rows, ship, 4)
+    assert line.startswith("Kp 4")          # earliest window >= 4
+    assert "AK" in line                       # local time shown
+    assert ("dark at ship" in line) or ("daylight at ship" in line)
+
+
+def test_next_window_line_none(ship, kp_rows):
+    assert forecast.next_window_line(kp_rows, ship, 9).startswith("None ≥ Kp 9")
+
+
 def test_noaa_viewline_embeds():
     embeds = forecast.noaa_viewline_embeds()
     assert len(embeds) == 2

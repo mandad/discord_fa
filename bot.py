@@ -125,12 +125,9 @@ async def aurora_cmd(interaction: discord.Interaction):
         ship_data, kp_rows, grid, obs_time = await gather_data()
         observed = swpc.latest_observed_kp(kp_rows)
         embed = forecast.build_observed_embed(ship_data, observed, grid, obs_time)
-        ge = swpc.predicted_ge(kp_rows, config.KP_THRESHOLD)
-        if ge:
-            nxt = ge[0]
-            embed.add_field(name=f"Next Kp ≥ {config.KP_THRESHOLD:g}",
-                            value=f"Kp {nxt['kp']:g} — {solar.window_label(nxt['time_tag'], ship_data.get('lat'), ship_data.get('lon'))}",
-                            inline=False)
+        embed.add_field(name=f"Next Kp ≥ {config.KP_THRESHOLD:g} window",
+                        value=forecast.next_window_line(kp_rows, ship_data, config.KP_THRESHOLD),
+                        inline=False)
         await interaction.followup.send(embed=embed)
     except Exception:
         log.exception("/aurora failed")

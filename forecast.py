@@ -1,11 +1,29 @@
 """Discord embed builders for the prediction (daily) and observed (hourly) posts."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import discord
 
 import gi
 import solar
 import swpc
+
+
+def next_window_line(kp_rows: list[dict], ship: dict, threshold: float) -> str:
+    """One-line summary of the next upcoming predicted Kp >= threshold window (for /aurora)."""
+    ge = swpc.predicted_ge(kp_rows, threshold)
+    if not ge:
+        return f"None ≥ Kp {threshold:g} in the SWPC 3-day forecast."
+    lat, lon = ship.get("lat"), ship.get("lon")
+    nxt = ge[0]
+    dt = solar.parse_swpc(nxt["time_tag"])
+    hrs = (dt - datetime.now(timezone.utc)).total_seconds() / 3600
+    rel = f"in {hrs / 24:.1f} d" if hrs >= 24 else f"in {max(0, hrs):.0f} h"
+    line = f"Kp {nxt['kp']:g} — {solar.window_label(nxt['time_tag'], lat, lon)} ({rel})"
+    if lat is not None and lon is not None:
+        line += " · 🌑 dark at ship" if solar.is_dark_nautical(lat, lon, dt) else " · ☀️ daylight at ship"
+    return line
 
 
 def _crossref_value(kp_rows: list[dict], gi_daily: dict | None, dates) -> str:
