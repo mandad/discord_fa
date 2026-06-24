@@ -72,6 +72,17 @@ The bot is a long-running process; Task Scheduler launches it and restarts it if
 `start-bot.ps1` runs `wsl.exe -d Ubuntu -- bash -lc '... python3 bot.py'`. Edit the distro name
 in that file if yours isn't `Ubuntu` (check with `wsl -l -q`).
 
+## Tests / CI
+```bash
+pip install -r requirements-dev.txt
+pytest -m "not live"   # offline unit suite (no token/network/ship-position.py needed)
+pytest -m live         # hits real SWPC / OVATION / GI / NOAA endpoints
+```
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push + PR: a **required** offline job
+and a **non-blocking** live job (upstream feeds can flake; unreachable hosts are skipped). Tests
+live in `tests/` and cover the forecast pipeline (`swpc`, `solar`, `alerts`, `gi`) and the
+Discord-facing logic (embed builders + `bot.maybe_alert` against a fake channel).
+
 ## Files
 | File | Role |
 |------|------|
