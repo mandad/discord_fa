@@ -54,10 +54,21 @@ sudo systemctl start aurora-bot
 journalctl -u aurora-bot -f                        # expect "logged in as ..." + "commands synced"
 ```
 
+## Health check (after any deploy/update)
+```bash
+bash /opt/aurora-bot/deploy/healthcheck.sh
+# or remotely:
+gcloud compute ssh aurora-bot --project=aurora-bot --zone=<zone> \
+  --command='bash /opt/aurora-bot/deploy/healthcheck.sh'
+```
+Reports systemd active state, startup markers (`ready as…`, `slash commands synced`), recent
+errors, and live smoke tests of the feeds (SWPC+OVATION, ship position, GI). Exit 0 = PASS.
+
 ## Updating the bot code (pull from GitHub)
 After you push changes to `mandad/discord_fa`, update the VM:
 ```bash
 bash /opt/aurora-bot/deploy/update.sh      # git pull origin/main + sync deps + restart
+bash /opt/aurora-bot/deploy/healthcheck.sh # verify
 ```
 The hard reset leaves ignored files (`.env`, `.venv/`, `ship-position.py`, `state.json`) intact.
 
