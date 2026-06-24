@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: unit tests (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Run offline test suite
+        run: pytest -m "not live" -q
+
+  live:
+    name: live endpoint checks (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # upstream feeds can flake; don't fail the commit on a transient outage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Pull real forecasts (SWPC / OVATION / GI / NOAA viewline)
+        run: pytest -m live -q
