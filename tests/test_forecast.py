@@ -50,6 +50,18 @@ def test_next_window_line_none(ship, kp_rows):
     assert forecast.next_window_line(kp_rows, ship, 9).startswith("None ≥ Kp 9")
 
 
+def test_swpc_forecast_embed_attaches_bytes():
+    e, f = forecast.swpc_forecast_embed(b"\xff\xd8\xffjpeg")
+    assert f is not None and f.filename == "swpc_aurora_forecast.jpg"
+    assert e.image.url == "attachment://swpc_aurora_forecast.jpg"
+
+
+def test_swpc_forecast_embed_url_fallback():
+    e, f = forecast.swpc_forecast_embed(None)
+    assert f is None
+    assert e.image.url == swpc.NOAA_OVATION_IMAGE
+
+
 def test_noaa_viewline_embeds():
     embeds = forecast.noaa_viewline_embeds()
     assert len(embeds) == 2

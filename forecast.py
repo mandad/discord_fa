@@ -1,6 +1,7 @@
 """Discord embed builders for the prediction (daily) and observed (hourly) posts."""
 from __future__ import annotations
 
+import io
 from datetime import datetime, timezone
 
 import discord
@@ -149,6 +150,23 @@ def build_alert_embed(new_windows: list[dict], ship: dict, kp_rows: list[dict],
     e.set_image(url=gi.viewline_url(peak_kp))
     e.set_footer(text=f"Viewline: UAF Geophysical Institute (Alaska, Kp {peak_kp})")
     return e
+
+
+def swpc_forecast_embed(img_bytes: bytes | None = None):
+    """SWPC current OVATION aurora forecast map (N. hemisphere) as an image embed.
+
+    Returns (embed, file). With img_bytes, the image is attached so Discord shows the current
+    frame rather than a cached copy of the static URL; otherwise it falls back to the URL and
+    file is None.
+    """
+    e = discord.Embed(title="🛰️ SWPC aurora forecast — current (OVATION, N. hemisphere)",
+                      url=swpc.NOAA_OVATION_PAGE, color=0x1ABC9C)
+    if img_bytes:
+        f = discord.File(io.BytesIO(img_bytes), filename="swpc_aurora_forecast.jpg")
+        e.set_image(url="attachment://swpc_aurora_forecast.jpg")
+        return e, f
+    e.set_image(url=swpc.NOAA_OVATION_IMAGE)
+    return e, None
 
 
 def noaa_viewline_embeds() -> list[discord.Embed]:

@@ -36,6 +36,10 @@ async def _run_alert(monkeypatch, tmp_path, kp_rows, ship):
     async def fake_gi(_session):
         return {"2026-06-25": 4, "2026-06-26": 5}
     monkeypatch.setattr(bot.gi, "fetch_daily", fake_gi)
+
+    async def fake_img(_session):
+        return b"\xff\xd8\xff_fake_jpeg"
+    monkeypatch.setattr(bot.swpc, "fetch_ovation_image", fake_img)
     return ch
 
 
@@ -47,11 +51,13 @@ async def test_maybe_alert_sends_everyone_with_viewlines(monkeypatch, tmp_path, 
     sent = ch.sends[0]
     assert sent["content"] == "@everyone"
     assert sent["allowed_mentions"].everyone is True
-    # main alert embed + NOAA tonight + NOAA tomorrow = 3 embeds, all with images.
+    # alert embed + SWPC OVATION map + NOAA tonight + NOAA tomorrow = 4 embeds, all with images.
     embeds = sent["embeds"]
-    assert len(embeds) == 3
+    assert len(embeds) == 4
     assert all(e.image.url for e in embeds)
-    assert "Alaska_" in embeds[0].image.url
+    assert "Alaska_" in embeds[0].image.url                       # GI viewline on the alert embed
+    assert embeds[1].image.url == "attachment://swpc_aurora_forecast.jpg"  # SWPC map attached
+    assert len(sent["files"]) == 1                                # the attached SWPC image
 
 
 async def test_maybe_alert_dedupes_second_call(monkeypatch, tmp_path, kp_rows, ship):

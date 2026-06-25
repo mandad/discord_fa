@@ -22,6 +22,12 @@ NOAA_VIEWLINE = {
     "tomorrow night": "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png",
 }
 
+# Current OVATION aurora forecast map (Northern Hemisphere, ~30-min nowcast). Static URL that
+# always serves the latest frame; we attach the bytes so Discord shows the current map, not a
+# cached copy of the URL.
+NOAA_OVATION_PAGE = "https://www.swpc.noaa.gov/products/aurora-30-minute-forecast"
+NOAA_OVATION_IMAGE = "https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg"
+
 
 async def _fetch_json(session: aiohttp.ClientSession, url: str):
     async with session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=30)) as r:
@@ -43,6 +49,17 @@ async def fetch_kp_forecast(session: aiohttp.ClientSession) -> list[dict]:
         except (KeyError, ValueError, TypeError):
             continue
     return rows
+
+
+async def fetch_ovation_image(session: aiohttp.ClientSession) -> bytes | None:
+    """Current SWPC OVATION aurora forecast image (N. hemisphere) as bytes; None on failure."""
+    try:
+        async with session.get(NOAA_OVATION_IMAGE, headers=HEADERS,
+                               timeout=aiohttp.ClientTimeout(total=30)) as r:
+            r.raise_for_status()
+            return await r.read()
+    except Exception:
+        return None
 
 
 async def fetch_ovation(session: aiohttp.ClientSession):

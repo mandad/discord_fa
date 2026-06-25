@@ -71,10 +71,14 @@ async def maybe_alert(kp_rows: list[dict], ship_data: dict):
     if ch is None:
         return
     async with aiohttp.ClientSession() as s:
-        gi_daily = await gi.fetch_daily(s)  # best-effort; {} on failure
+        gi_daily = await gi.fetch_daily(s)        # best-effort; {} on failure
+        swpc_img = await swpc.fetch_ovation_image(s)  # best-effort; None on failure
     embed = forecast.build_alert_embed(new, ship_data, kp_rows, gi_daily, config.KP_THRESHOLD)
-    embeds = [embed, *forecast.noaa_viewline_embeds()]  # GI Alaska viewline + NOAA tonight/tomorrow
-    await ch.send(content="@everyone", embeds=embeds,
+    swpc_embed, swpc_file = forecast.swpc_forecast_embed(swpc_img)
+    # GI Alaska viewline (on the alert embed) + current SWPC OVATION map + NOAA tonight/tomorrow.
+    embeds = [embed, swpc_embed, *forecast.noaa_viewline_embeds()]
+    files = [swpc_file] if swpc_file else []
+    await ch.send(content="@everyone", embeds=embeds, files=files,
                   allowed_mentions=discord.AllowedMentions(everyone=True))
     log.info("posted Kp alert for %d window(s)", len(new))
 
