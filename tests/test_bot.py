@@ -66,3 +66,31 @@ async def test_maybe_alert_suppressed_when_daylight(monkeypatch, tmp_path, kp_ro
     monkeypatch.setattr("solar.is_dark_nautical", lambda *a, **k: False)  # all windows in daylight
     await bot.maybe_alert(kp_rows, ship)
     assert ch.sends == []
+
+
+async def _run_hourly(monkeypatch, kp_rows, grid, ship, *, dark, prob):
+    ch = FakeChannel()
+    monkeypatch.setattr(bot, "_channel", lambda: ch)
+
+    async def fake_gather():
+        return ship, kp_rows, grid, "2026-06-23T16:07:00Z"
+    monkeypatch.setattr(bot, "gather_data", fake_gather)
+    monkeypatch.setattr(bot.swpc, "aurora_prob_at", lambda *a, **k: prob)
+    monkeypatch.setattr("solar.is_dark_nautical", lambda *a, **k: dark)
+
+    async def noop_alert(*a, **k):  # alert path tested separately
+        return None
+    monkeypatch.setattr(bot, "maybe_alert", noop_alert)
+    await bot.hourly_observed()
+    return ch
+
+
+async def test_hourly_posts_when_dark_and_above_threshold(monkeypatch, kp_rows, grid, ship):
+    ch = await _run_hourly(monkeypatch, kp_rows, grid, ship, dark=True, prob=80)
+    assert len(ch.sends) == 1
+
+
+async def test_hourly_suppressed_in_daylight_even_if_high_prob(monkeypatch, kp_rows, grid, ship):
+    # The reported bug: high Kp/aurora % but still light at the ship -> must NOT post.
+    ch = await _run_hourly(monkeypatch, kp_rows, grid, ship, dark=False, prob=80)
+    assert ch.sends == []

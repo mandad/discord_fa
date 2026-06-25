@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import time, timezone
+from datetime import datetime, time, timezone
 
 import aiohttp
 import discord
@@ -100,16 +100,22 @@ async def daily_prediction():
 async def hourly_observed():
     try:
         ship_data, kp_rows, grid, obs_time = await gather_data()
-        prob = swpc.aurora_prob_at(grid, ship_data.get("lat"), ship_data.get("lon"))
-        # Only post the hourly update when aurora chance at the ship clears the threshold.
-        if prob is not None and prob >= config.MIN_AURORA_PCT:
+        lat, lon = ship_data.get("lat"), ship_data.get("lon")
+        prob = swpc.aurora_prob_at(grid, lat, lon)
+        # Aurora is only visible after nautical twilight, so don't post observed conditions while
+        # it's still light at the ship (sun above -12 deg). Unknown position -> don't suppress.
+        dark = lat is None or lon is None or solar.is_dark_nautical(lat, lon, datetime.now(timezone.utc))
+        # Post the hourly update only when it's dark at the ship AND aurora chance clears the threshold.
+        if dark and prob is not None and prob >= config.MIN_AURORA_PCT:
             ch = _channel()
             if ch:
                 observed = swpc.latest_observed_kp(kp_rows)
                 embed = forecast.build_observed_embed(ship_data, observed, grid, obs_time)
                 await ch.send(embed=embed)
-                log.info("posted hourly observed conditions (aurora %s%% >= %s%% at ship)",
+                log.info("posted hourly observed conditions (aurora %s%% >= %s%% at ship, dark)",
                          prob, config.MIN_AURORA_PCT)
+        elif not dark:
+            log.info("skipped hourly post (still light at ship; aurora %s%%)", prob)
         else:
             log.info("skipped hourly post (aurora %s%% < %s%% at ship)", prob, config.MIN_AURORA_PCT)
         # Alert check runs every hour regardless of local aurora probability.
