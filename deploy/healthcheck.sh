@@ -32,9 +32,11 @@ else
 fi
 
 say "startup markers (whole journal)"
-J() { journalctl -u aurora-bot --no-pager 2>/dev/null; }
-J | grep -qE "ready as "             && echo "logged in:     yes" || echo "logged in:     not seen"
-J | grep -qE "slash commands synced" && echo "commands sync: yes" || echo "commands sync: not seen"
+# Capture once: piping journalctl into `grep -q` trips SIGPIPE under `set -o pipefail`
+# (grep closes the pipe on first match) and would report a false "not seen".
+jrnl=$(journalctl -u aurora-bot --no-pager 2>/dev/null)
+grep -qE "ready as "             <<<"$jrnl" && echo "logged in:     yes" || echo "logged in:     not seen"
+grep -qE "slash commands synced" <<<"$jrnl" && echo "commands sync: yes" || echo "commands sync: not seen"
 errs=$(journalctl -u aurora-bot -n 300 --no-pager 2>/dev/null | grep -cE "Traceback|ERROR")
 echo "errors (last 300 log lines): $errs"
 
