@@ -127,6 +127,13 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
     xref_dates = [r["time_tag"][:10] for r in ge] or [p["time_tag"][:10] for p in peaks[:1]]
     e.add_field(name="🔭 UAF GI cross-reference",
                 value=_crossref_value(kp_rows, gi_daily, xref_dates), inline=False)
+    e.add_field(name="🗺️ Predicted viewline",
+                value=f"GI Alaska map below (Kp {int(round(top_kp))}) · "
+                      f"[NOAA Aurora Dashboard]({swpc.NOAA_AURORA_DASHBOARD})" if top_kp is not None
+                      else f"[NOAA Aurora Dashboard]({swpc.NOAA_AURORA_DASHBOARD})",
+                inline=False)
+    if top_kp is not None:
+        e.set_image(url=gi.viewline_url(top_kp))  # GI predicted Alaska viewline for the peak Kp
     if obs_time:
         e.set_footer(text=f"OVATION obs {solar.local_str(obs_time, lat, lon)} · source: NOAA SWPC + mfphub AIS")
     return e

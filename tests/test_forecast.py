@@ -31,6 +31,14 @@ def test_prediction_embed_has_crossref_and_kp_field(ship, grid, kp_rows):
     assert "GI Kp 4" in xref and "gi.alaska.edu" in xref
 
 
+def test_prediction_embed_has_gi_viewline_image_and_noaa_dashboard_link(ship, grid, kp_rows):
+    e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
+    # GI predicted Alaska viewline attached as the embed image (peak predicted Kp 5 -> Alaska_5).
+    assert e.image.url == "https://www.gi.alaska.edu/modules/custom/aurora-forecast/images/idl_graphics/ak/Alaska_5.png"
+    blob = " ".join(f.value for f in e.fields)
+    assert swpc.NOAA_AURORA_DASHBOARD in blob
+
+
 def test_alert_embed_image_crossref_footer(ship, kp_rows):
     windows = [r for r in kp_rows if r["kind"] == "predicted" and r["kp"] >= 4]
     e = forecast.build_alert_embed(windows, ship, kp_rows, {"2026-06-25": 4}, 4)

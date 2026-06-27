@@ -17,6 +17,8 @@ HEADERS = {"User-Agent": "aurora-fairweather-bot/1.0"}
 
 # NOAA SWPC experimental static viewline forecast (OVATION driven by the 3-day Kp forecast).
 NOAA_VIEWLINE_PAGE = "https://www.spaceweather.gov/products/aurora-viewline-tonight-and-tomorrow-night-experimental"
+# NOAA SWPC Aurora Dashboard (experimental) — the predicted-viewline landing page.
+NOAA_AURORA_DASHBOARD = "https://www.swpc.noaa.gov/communities/aurora-dashboard-experimental"
 NOAA_VIEWLINE = {
     "tonight": "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png",
     "tomorrow night": "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png",
