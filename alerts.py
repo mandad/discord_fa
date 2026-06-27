@@ -11,6 +11,9 @@ from pathlib import Path
 import swpc
 
 
+_DAILY_KEY = "_last_daily_date"  # reserved key; not a Kp time_tag, so it never collides
+
+
 def load_state(path: Path) -> dict:
     try:
         return json.loads(Path(path).read_text())
@@ -20,6 +23,18 @@ def load_state(path: Path) -> dict:
 
 def save_state(path: Path, state: dict) -> None:
     Path(path).write_text(json.dumps(state, indent=2))
+
+
+def daily_already_posted(path: Path, date_key: str) -> bool:
+    """True if the once-daily post already ran for `date_key` (a local YYYY-MM-DD)."""
+    return load_state(path).get(_DAILY_KEY) == date_key
+
+
+def mark_daily_posted(path: Path, date_key: str) -> None:
+    """Record that the daily post ran for `date_key`, preserving the Kp-alert state."""
+    state = load_state(path)
+    state[_DAILY_KEY] = date_key
+    save_state(path, state)
 
 
 def check_kp_alert(rows: list[dict], state: dict, threshold: float, keep=None) -> list[dict]:

@@ -35,3 +35,14 @@ def test_state_roundtrip(tmp_path):
     assert alerts.load_state(p) == {}          # missing file -> empty
     alerts.save_state(p, {"2026-06-25T03:00:00": 4.0})
     assert alerts.load_state(p) == {"2026-06-25T03:00:00": 4.0}
+
+
+def test_daily_dedupe_roundtrip_preserves_alert_state(tmp_path):
+    p = tmp_path / "state.json"
+    assert alerts.daily_already_posted(p, "2026-06-25") is False
+    alerts.save_state(p, {"2026-06-25T03:00:00": 4.0})   # pre-existing Kp-alert state
+    alerts.mark_daily_posted(p, "2026-06-25")
+    assert alerts.daily_already_posted(p, "2026-06-25") is True
+    assert alerts.daily_already_posted(p, "2026-06-26") is False   # different day not suppressed
+    # marking the daily date must not clobber the Kp-alert windows
+    assert alerts.load_state(p)["2026-06-25T03:00:00"] == 4.0

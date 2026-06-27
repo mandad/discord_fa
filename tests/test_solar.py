@@ -42,3 +42,12 @@ def test_window_label_and_local_str_format():
 def test_no_position_defaults_to_alaska():
     # When lat/lon are unknown, still resolve to Alaska time (not a crash, not UTC).
     assert "AK" in solar.window_label("2026-06-25T03:00:00", None, None)
+
+
+def test_default_local_date_same_ak_day_across_utc_dates():
+    # The reported double: 18:00 UTC Jun 25 and 01:00 UTC Jun 26 are different UTC dates but
+    # both fall on Jun 25 in Alaska (AKDT = UTC-8) -> dedupe must treat them as one day.
+    early = datetime(2026, 6, 25, 18, tzinfo=timezone.utc)   # 10:00 AKDT Jun 25
+    late = datetime(2026, 6, 26, 1, tzinfo=timezone.utc)     # 17:00 AKDT Jun 25
+    assert solar.default_local_date(early) == "2026-06-25"
+    assert solar.default_local_date(late) == "2026-06-25"

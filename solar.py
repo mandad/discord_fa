@@ -39,6 +39,17 @@ def local_str(iso: str, lat, lon, fmt: str = "%a %H:%M %Z") -> str:
     return loc.strftime(fmt)
 
 
+def default_local_date(dt_utc: datetime | None = None) -> str:
+    """Today's calendar date (YYYY-MM-DD) in the default ship timezone (Alaska).
+
+    Used to dedupe the once-daily post by *local* day: the daily slot can land on two
+    different UTC dates within one Alaska day if the post time is changed, so UTC-date
+    dedupe would miss it. `dt_utc` overridable for tests.
+    """
+    dt = dt_utc or datetime.now(timezone.utc)
+    return dt.astimezone(_zone(DEFAULT_TZ_NAME)).date().isoformat()
+
+
 def _julian(dt: datetime) -> float:
     dt = dt.astimezone(timezone.utc)
     y, m = dt.year, dt.month

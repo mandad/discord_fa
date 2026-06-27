@@ -86,6 +86,13 @@ async def maybe_alert(kp_rows: list[dict], ship_data: dict):
 @tasks.loop(time=time(hour=config.DAILY_POST_UTC, tzinfo=timezone.utc))
 async def daily_prediction():
     try:
+        # Dedupe by Alaska calendar date: a restart or a change to DAILY_POST_UTC can fire the
+        # daily slot twice within one local day (the two fires can fall on different UTC dates),
+        # so guard on the ship-local date, not UTC.
+        local_date = solar.default_local_date()
+        if alerts.daily_already_posted(config.STATE_PATH, local_date):
+            log.info("daily prediction already posted for %s (AK date) — skipping", local_date)
+            return
         ship_data, kp_rows, grid, obs_time = await gather_data()
         ch = _channel()
         if ch:
@@ -94,7 +101,8 @@ async def daily_prediction():
             embed = forecast.build_prediction_embed(ship_data, kp_rows, grid, obs_time,
                                                     config.KP_THRESHOLD, gi_daily=gi_daily)
             await ch.send(embed=embed)
-            log.info("posted daily prediction")
+            alerts.mark_daily_posted(config.STATE_PATH, local_date)
+            log.info("posted daily prediction (AK date %s)", local_date)
         await maybe_alert(kp_rows, ship_data)
     except Exception:
         log.exception("daily_prediction failed")

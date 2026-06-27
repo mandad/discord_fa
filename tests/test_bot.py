@@ -7,6 +7,7 @@ import discord
 
 import bot
 import config
+import solar
 
 
 class FakeChannel:
@@ -100,3 +101,28 @@ async def test_hourly_suppressed_in_daylight_even_if_high_prob(monkeypatch, kp_r
     # The reported bug: high Kp/aurora % but still light at the ship -> must NOT post.
     ch = await _run_hourly(monkeypatch, kp_rows, grid, ship, dark=False, prob=80)
     assert ch.sends == []
+
+
+async def test_daily_posts_once_per_local_day(monkeypatch, tmp_path, kp_rows, grid, ship):
+    # Two fires on the same Alaska date (e.g. after a DAILY_POST_UTC change + restart) must
+    # produce a single daily post.
+    ch = FakeChannel()
+    monkeypatch.setattr(bot, "_channel", lambda: ch)
+    monkeypatch.setattr(config, "STATE_PATH", tmp_path / "state.json")
+    monkeypatch.setattr(solar, "default_local_date", lambda *a, **k: "2026-06-25")
+
+    async def fake_gather():
+        return ship, kp_rows, grid, "2026-06-25T16:07:00Z"
+    monkeypatch.setattr(bot, "gather_data", fake_gather)
+
+    async def fake_gi(_s):
+        return {}
+    monkeypatch.setattr(bot.gi, "fetch_daily", fake_gi)
+
+    async def noop_alert(*a, **k):
+        return None
+    monkeypatch.setattr(bot, "maybe_alert", noop_alert)
+
+    await bot.daily_prediction()
+    await bot.daily_prediction()   # same AK date -> deduped
+    assert len(ch.sends) == 1
