@@ -124,6 +124,8 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
         ge_txt = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lat, lon)}" for r in ge)
         e.add_field(name=f"⚡ Forecast Kp ≥ {threshold:g}", value=ge_txt, inline=False)
     e.add_field(name="Outlook", value=viewing_assessment(prob, top_kp), inline=False)
+    e.add_field(name="🌑 Dark hours at ship (nautical night)",
+                value=solar.nautical_dark_label(lat, lon), inline=False)
     xref_dates = [r["time_tag"][:10] for r in ge] or [p["time_tag"][:10] for p in peaks[:1]]
     e.add_field(name="🔭 UAF GI cross-reference",
                 value=_crossref_value(kp_rows, gi_daily, xref_dates), inline=False)

@@ -39,6 +39,11 @@ def test_prediction_embed_has_gi_viewline_image_and_noaa_dashboard_link(ship, gr
     assert swpc.NOAA_AURORA_DASHBOARD in blob
 
 
+def test_prediction_embed_has_dark_hours_field(ship, grid, kp_rows):
+    e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
+    assert any("Dark hours" in f.name for f in e.fields)
+
+
 def test_alert_embed_image_crossref_footer(ship, kp_rows):
     windows = [r for r in kp_rows if r["kind"] == "predicted" and r["kp"] >= 4]
     e = forecast.build_alert_embed(windows, ship, kp_rows, {"2026-06-25": 4}, 4)

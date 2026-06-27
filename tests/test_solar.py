@@ -44,6 +44,31 @@ def test_no_position_defaults_to_alaska():
     assert "AK" in solar.window_label("2026-06-25T03:00:00", None, None)
 
 
+def test_nautical_dark_window_summer_high_latitude_never_dark():
+    # Bering Sea in late June: sun never drops below -12 deg -> no nautical darkness.
+    ref = datetime(2026, 6, 22, 20, tzinfo=timezone.utc)
+    status, start, end, abbr = solar.nautical_dark_window(60.5, -172.9, ref)
+    assert status == "never_dark" and start is None
+    assert "no nautical darkness" in solar.nautical_dark_label(60.5, -172.9, ref)
+
+
+def test_nautical_dark_window_winter_has_dusk_dawn():
+    # Kodiak in January: a real overnight dark window with dusk before dawn.
+    ref = datetime(2026, 1, 15, 20, tzinfo=timezone.utc)
+    status, start, end, abbr = solar.nautical_dark_window(57.79, -152.41, ref)
+    assert status == "window"
+    assert start < end                      # dusk precedes dawn
+    assert abbr.startswith("AK")            # Alaska local tz
+    label = solar.nautical_dark_label(57.79, -152.41, ref)
+    assert "dusk" in label and "–" in label
+
+
+def test_nautical_dark_window_unknown_position():
+    status, start, end, abbr = solar.nautical_dark_window(None, None)
+    assert status == "unknown" and start is None
+    assert solar.nautical_dark_label(None, None) == "position unknown"
+
+
 def test_default_local_date_same_ak_day_across_utc_dates():
     # The reported double: 18:00 UTC Jun 25 and 01:00 UTC Jun 26 are different UTC dates but
     # both fall on Jun 25 in Alaska (AKDT = UTC-8) -> dedupe must treat them as one day.

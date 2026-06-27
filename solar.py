@@ -84,6 +84,59 @@ def is_dark_nautical(lat: float, lon: float, dt: datetime) -> bool:
     return sun_altitude(lat, lon, dt) < NAUTICAL_TWILIGHT_ALT
 
 
+def nautical_dark_window(lat, lon, ref_utc: datetime | None = None):
+    """Nautical-dark window (sun < -12 deg) for the night around `ref_utc` at (lat, lon).
+
+    Scans the 24 h starting at local noon (so the night sits in the middle) at 1-min steps.
+    Returns (status, start_local, end_local, tzabbr):
+      'window'      -> start/end are the dusk/dawn local datetimes
+      'always_dark' -> sun never climbs above -12 deg (start/end None)
+      'never_dark'  -> sun never drops below -12 deg, e.g. high-latitude summer (start/end None)
+      'unknown'     -> position unavailable (start/end None)
+    """
+    tz = ship_tz(lat, lon)
+    if lat is None or lon is None:
+        return "unknown", None, None, DEFAULT_TZ_NAME
+    ref = ref_utc or datetime.now(timezone.utc)
+    anchor_local = ref.astimezone(tz).replace(hour=12, minute=0, second=0, microsecond=0)
+    anchor_utc = anchor_local.astimezone(timezone.utc)
+    samples = [(anchor_utc + timedelta(minutes=i),
+                sun_altitude(lat, lon, anchor_utc + timedelta(minutes=i)) < NAUTICAL_TWILIGHT_ALT)
+               for i in range(24 * 60 + 1)]
+    darks = [d for _, d in samples]
+    abbr = anchor_local.strftime("%Z")
+    if all(darks):
+        return "always_dark", None, None, abbr
+    if not any(darks):
+        return "never_dark", None, None, abbr
+    # Scan starts at local noon (always light), so the first light->dark edge is dusk and the
+    # next dark->light edge is dawn.
+    dusk = dawn = None
+    for k in range(1, len(samples)):
+        prev_d, cur_d = samples[k - 1][1], samples[k][1]
+        if not prev_d and cur_d and dusk is None:
+            dusk = samples[k][0]
+        elif prev_d and not cur_d and dusk is not None:
+            dawn = samples[k][0]
+            break
+    if dusk is None or dawn is None:        # dark runs past the scan end -> treat as all-night
+        return "always_dark", None, None, abbr
+    start_local = dusk.astimezone(tz)
+    return "window", start_local, dawn.astimezone(tz), start_local.strftime("%Z")
+
+
+def nautical_dark_label(lat, lon, ref_utc: datetime | None = None) -> str:
+    """One-line dark-hours summary for the daily post, e.g. '23:42-03:18 AKDT (dusk -> dawn)'."""
+    status, start, end, abbr = nautical_dark_window(lat, lon, ref_utc)
+    if status == "window":
+        return f"{start:%H:%M}–{end:%H:%M} {abbr} · dusk → dawn (sun < −12°)"
+    if status == "always_dark":
+        return "dark all night (sun stays below −12°)"
+    if status == "never_dark":
+        return "no nautical darkness — sun stays above −12° (high-latitude summer)"
+    return "position unknown"
+
+
 @functools.lru_cache(maxsize=64)
 def _zone(name: str) -> ZoneInfo:
     return ZoneInfo(name)
