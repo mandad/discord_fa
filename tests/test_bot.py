@@ -18,6 +18,26 @@ class FakeChannel:
         self.sends.append(kwargs)
 
 
+class FakeInteraction:
+    """Minimal stand-in for discord.Interaction to exercise the /aurora callback offline."""
+    class _Resp:
+        async def defer(self, **k):
+            pass
+
+    class _Followup:
+        def __init__(self):
+            self.sends = []
+
+        async def send(self, **kwargs):
+            self.sends.append(kwargs)
+
+    def __init__(self):
+        self.response = self._Resp()
+        self.followup = self._Followup()
+        self.user = "tester"
+        self.channel_id = 123
+
+
 def test_aurora_slash_command_registered():
     names = {c.name for c in bot.bot.tree.get_commands()}
     assert "aurora" in names
@@ -101,6 +121,28 @@ async def test_hourly_suppressed_in_daylight_even_if_high_prob(monkeypatch, kp_r
     # The reported bug: high Kp/aurora % but still light at the ship -> must NOT post.
     ch = await _run_hourly(monkeypatch, kp_rows, grid, ship, dark=False, prob=80)
     assert ch.sends == []
+
+
+async def test_aurora_cmd_attaches_forecast_image_and_next_window(monkeypatch, kp_rows, grid, ship):
+    async def fake_gather():
+        return ship, kp_rows, grid, "2026-06-27T16:07:00Z"
+    monkeypatch.setattr(bot, "gather_data", fake_gather)
+
+    async def fake_img(_s):
+        return b"\xff\xd8\xff_fake_jpeg"
+    monkeypatch.setattr(bot.swpc, "fetch_ovation_image", fake_img)
+
+    it = FakeInteraction()
+    await bot.aurora_cmd.callback(it)
+
+    assert len(it.followup.sends) == 1
+    sent = it.followup.sends[0]
+    # observed embed + SWPC forecast image embed, with the attached image file
+    assert len(sent["embeds"]) == 2
+    assert sent["embeds"][1].image.url == "attachment://swpc_aurora_forecast.jpg"
+    assert len(sent["files"]) == 1
+    # the on-demand-only "Next Kp" field distinguishes /aurora from an automatic hourly post
+    assert any("Next Kp" in f.name for f in sent["embeds"][0].fields)
 
 
 async def test_daily_posts_once_per_local_day(monkeypatch, tmp_path, kp_rows, grid, ship):

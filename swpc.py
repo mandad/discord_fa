@@ -24,11 +24,11 @@ NOAA_VIEWLINE = {
     "tomorrow night": "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png",
 }
 
-# Current OVATION aurora forecast map (Northern Hemisphere, ~30-min nowcast). Static URL that
-# always serves the latest frame; we attach the bytes so Discord shows the current map, not a
-# cached copy of the URL.
+# Current OVATION aurora forecast map (Northern Hemisphere) — latest animation frame. Static URL
+# that always serves the newest frame; we attach the bytes so Discord shows the current map, not
+# a cached copy of the URL.
 NOAA_OVATION_PAGE = "https://www.swpc.noaa.gov/products/aurora-30-minute-forecast"
-NOAA_OVATION_IMAGE = "https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg"
+NOAA_OVATION_IMAGE = "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg"
 
 
 async def _fetch_json(session: aiohttp.ClientSession, url: str):

@@ -139,6 +139,9 @@ async def hourly_observed():
 @bot.tree.command(name="aurora", description="Current aurora odds at NOAA Ship Fairweather's position")
 async def aurora_cmd(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
+    # Log every on-demand invocation so a /aurora reply can be told apart from an automatic post.
+    log.info("/aurora invoked by %s (id %s) in channel %s",
+             interaction.user, getattr(interaction.user, "id", "?"), interaction.channel_id)
     try:
         ship_data, kp_rows, grid, obs_time = await gather_data()
         observed = swpc.latest_observed_kp(kp_rows)
@@ -146,7 +149,13 @@ async def aurora_cmd(interaction: discord.Interaction):
         embed.add_field(name=f"Next Kp ≥ {config.KP_THRESHOLD:g} window",
                         value=forecast.next_window_line(kp_rows, ship_data, config.KP_THRESHOLD),
                         inline=False)
-        await interaction.followup.send(embed=embed)
+        async with aiohttp.ClientSession() as s:
+            swpc_img = await swpc.fetch_ovation_image(s)  # best-effort; None on failure
+        swpc_embed, swpc_file = forecast.swpc_forecast_embed(swpc_img)
+        files = [swpc_file] if swpc_file else []
+        await interaction.followup.send(embeds=[embed, swpc_embed], files=files)
+        prob = swpc.aurora_prob_at(grid, ship_data.get("lat"), ship_data.get("lon"))
+        log.info("/aurora replied (aurora %s%% at ship)", prob)
     except Exception:
         log.exception("/aurora failed")
         await interaction.followup.send("Could not fetch aurora data right now — try again shortly.")
