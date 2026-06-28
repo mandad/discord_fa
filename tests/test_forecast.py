@@ -21,22 +21,23 @@ def test_observed_embed_no_motion_and_local_times(ship, grid, kp_rows):
     assert "AK" in e.footer.text          # local tz abbreviation
 
 
-def test_prediction_embed_has_crossref_and_kp_field(ship, grid, kp_rows):
+def test_prediction_embed_no_crossref_section_but_keeps_kp_field(ship, grid, kp_rows):
     e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4,
                                         gi_daily={"2026-06-25": 4})
     names = [f.name for f in e.fields]
-    assert any("cross-reference" in n.lower() for n in names)
+    assert not any("cross-reference" in n.lower() for n in names)   # section removed
     assert any("Kp ≥ 4" in n for n in names)
-    xref = next(f.value for f in e.fields if "cross-reference" in f.name.lower())
-    assert "GI Kp 4" in xref and "gi.alaska.edu" in xref
+    # the GI link now lives under the Predicted viewline field
+    viewline = next(f.value for f in e.fields if "viewline" in f.name.lower())
+    assert "gi.alaska.edu/monitors/aurora-forecast" in viewline
 
 
-def test_prediction_embed_has_gi_viewline_image_and_noaa_dashboard_link(ship, grid, kp_rows):
+def test_prediction_embed_has_gi_viewline_image_and_links(ship, grid, kp_rows):
     e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
     # GI predicted Alaska viewline attached as the embed image (peak predicted Kp 5 -> Alaska_5).
     assert e.image.url == "https://www.gi.alaska.edu/modules/custom/aurora-forecast/images/idl_graphics/ak/Alaska_5.png"
-    blob = " ".join(f.value for f in e.fields)
-    assert swpc.NOAA_AURORA_DASHBOARD in blob
+    viewline = next(f.value for f in e.fields if "viewline" in f.name.lower())
+    assert swpc.NOAA_AURORA_DASHBOARD in viewline and "UAF GI forecast" in viewline
 
 
 def test_prediction_embed_has_dark_hours_field(ship, grid, kp_rows):

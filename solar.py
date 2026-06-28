@@ -133,7 +133,7 @@ def nautical_dark_label(lat, lon, ref_utc: datetime | None = None) -> str:
     if status == "always_dark":
         return "dark all night (sun stays below −12°)"
     if status == "never_dark":
-        return "no nautical darkness — sun stays above −12° (high-latitude summer)"
+        return "no nautical darkness on this date"
     return "position unknown"
 
 

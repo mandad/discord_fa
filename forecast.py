@@ -126,13 +126,12 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
     e.add_field(name="Outlook", value=viewing_assessment(prob, top_kp), inline=False)
     e.add_field(name="🌑 Dark hours at ship (nautical night)",
                 value=solar.nautical_dark_label(lat, lon), inline=False)
-    xref_dates = [r["time_tag"][:10] for r in ge] or [p["time_tag"][:10] for p in peaks[:1]]
-    e.add_field(name="🔭 UAF GI cross-reference",
-                value=_crossref_value(kp_rows, gi_daily, xref_dates), inline=False)
+    # The GI forecast is still cross-referenced internally (gi_daily, used for the Kp alert); the
+    # daily post drops the per-date comparison section and just links the GI forecast here.
+    links = f"[NOAA Aurora Dashboard]({swpc.NOAA_AURORA_DASHBOARD}) · [UAF GI forecast]({gi.GI_URL})"
     e.add_field(name="🗺️ Predicted viewline",
-                value=f"GI Alaska map below (Kp {int(round(top_kp))}) · "
-                      f"[NOAA Aurora Dashboard]({swpc.NOAA_AURORA_DASHBOARD})" if top_kp is not None
-                      else f"[NOAA Aurora Dashboard]({swpc.NOAA_AURORA_DASHBOARD})",
+                value=f"GI Alaska map below (Kp {int(round(top_kp))}) · {links}"
+                      if top_kp is not None else links,
                 inline=False)
     if top_kp is not None:
         e.set_image(url=gi.viewline_url(top_kp))  # GI predicted Alaska viewline for the peak Kp
