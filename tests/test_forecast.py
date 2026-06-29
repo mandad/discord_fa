@@ -45,12 +45,12 @@ def test_prediction_embed_has_dark_hours_field(ship, grid, kp_rows):
     assert any("Dark hours" in f.name for f in e.fields)
 
 
-def test_alert_embed_image_crossref_footer(ship, kp_rows):
+def test_alert_embed_image_footer_no_crossref(ship, kp_rows):
     windows = [r for r in kp_rows if r["kind"] == "predicted" and r["kp"] >= 4]
     e = forecast.build_alert_embed(windows, ship, kp_rows, {"2026-06-25": 4}, 4)
     assert e.image.url.endswith("Alaska_5.png")   # peak Kp among windows is 5
     assert "Kp 5" in e.footer.text
-    assert any("cross-reference" in f.name.lower() for f in e.fields)
+    assert not any("cross-reference" in f.name.lower() for f in e.fields)   # section removed
 
 
 def test_next_window_line_with_window(ship, kp_rows):

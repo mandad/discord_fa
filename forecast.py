@@ -27,19 +27,6 @@ def next_window_line(kp_rows: list[dict], ship: dict, threshold: float) -> str:
     return line
 
 
-def _crossref_value(kp_rows: list[dict], gi_daily: dict | None, dates) -> str:
-    """Per-date 'ours vs UAF GI' Kp comparison plus a link to the GI forecast/viewline page."""
-    lines = []
-    for d in sorted(set(dates)):
-        ours = max((r["kp"] for r in kp_rows if r["time_tag"][:10] == d), default=None)
-        g = (gi_daily or {}).get(d)
-        g_txt = f"Kp {g}" if g is not None else "Kp —"
-        lines.append(f"{d}: ours Kp {ours:g} · GI {g_txt}" if ours is not None
-                     else f"{d}: GI {g_txt}")
-    lines.append(f"[GI forecast & viewline]({gi.GI_URL})")
-    return "\n".join(lines)
-
-
 def _pos_line(ship: dict, include_motion: bool = True) -> str:
     lat, lon = ship.get("lat"), ship.get("lon")
     line = f"**{lat:.3f}, {lon:.3f}**" if lat is not None and lon is not None else "position unknown"
@@ -142,7 +129,10 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
 
 def build_alert_embed(new_windows: list[dict], ship: dict, kp_rows: list[dict],
                       gi_daily: dict | None, threshold: float) -> discord.Embed:
-    """Kp alert embed: window list, UAF GI cross-reference, and the GI Alaska viewline map."""
+    """Kp alert embed: window list + the GI Alaska viewline map (cross-referenced internally).
+
+    `gi_daily` is still cross-referenced upstream but no longer rendered as a section.
+    """
     lat, lon = ship.get("lat"), ship.get("lon")
     lines = "\n".join(f"Kp {r['kp']:g} — {solar.window_label(r['time_tag'], lat, lon)}"
                       for r in new_windows)
@@ -151,9 +141,6 @@ def build_alert_embed(new_windows: list[dict], ship: dict, kp_rows: list[dict],
         description=lines,
         color=0x9B59B6,
     )
-    e.add_field(name="🔭 UAF GI cross-reference",
-                value=_crossref_value(kp_rows, gi_daily, [r["time_tag"][:10] for r in new_windows]),
-                inline=False)
     peak_kp = max(int(round(r["kp"])) for r in new_windows)
     e.set_image(url=gi.viewline_url(peak_kp))
     e.set_footer(text=f"Viewline: UAF Geophysical Institute (Alaska, Kp {peak_kp})")
