@@ -117,11 +117,11 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
     # daily post drops the per-date comparison section and just links the GI forecast here.
     links = f"[NOAA Aurora Dashboard]({swpc.NOAA_AURORA_DASHBOARD}) · [UAF GI forecast]({gi.GI_URL})"
     e.add_field(name="🗺️ Predicted viewline",
-                value=f"GI Alaska map below (Kp {int(round(top_kp))}) · {links}"
-                      if top_kp is not None else links,
+                value=f"NOAA tonight's viewline below · {links}",
                 inline=False)
-    if top_kp is not None:
-        e.set_image(url=gi.viewline_url(top_kp))  # GI predicted Alaska viewline for the peak Kp
+    # NOAA Aurora Dashboard "tonight" viewline: shows the night's predicted equatorward
+    # visibility line, unlike the GI Alaska map which only reflects the current Kp.
+    e.set_image(url=swpc.NOAA_VIEWLINE["tonight"])
     if obs_time:
         e.set_footer(text=f"OVATION obs {solar.local_str(obs_time, lat, lon)} · source: NOAA SWPC + mfphub AIS")
     return e

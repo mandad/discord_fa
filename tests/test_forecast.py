@@ -32,10 +32,11 @@ def test_prediction_embed_no_crossref_section_but_keeps_kp_field(ship, grid, kp_
     assert "gi.alaska.edu/monitors/aurora-forecast" in viewline
 
 
-def test_prediction_embed_has_gi_viewline_image_and_links(ship, grid, kp_rows):
+def test_prediction_embed_has_noaa_tonight_viewline_image_and_links(ship, grid, kp_rows):
     e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
-    # GI predicted Alaska viewline attached as the embed image (peak predicted Kp 5 -> Alaska_5).
-    assert e.image.url == "https://www.gi.alaska.edu/modules/custom/aurora-forecast/images/idl_graphics/ak/Alaska_5.png"
+    # NOAA Aurora Dashboard "tonight" viewline is the embedded image (predicted for the night,
+    # not GI's current-Kp-only Alaska map).
+    assert e.image.url == swpc.NOAA_VIEWLINE["tonight"]
     viewline = next(f.value for f in e.fields if "viewline" in f.name.lower())
     assert swpc.NOAA_AURORA_DASHBOARD in viewline and "UAF GI forecast" in viewline
 
