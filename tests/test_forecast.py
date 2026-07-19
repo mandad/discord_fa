@@ -22,8 +22,8 @@ def test_observed_embed_no_motion_and_local_times(ship, grid, kp_rows):
 
 
 def test_prediction_embed_no_crossref_section_but_keeps_kp_field(ship, grid, kp_rows):
-    e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4,
-                                        gi_daily={"2026-06-25": 4})
+    e, _ = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4,
+                                           gi_daily={"2026-06-25": 4})
     names = [f.name for f in e.fields]
     assert not any("cross-reference" in n.lower() for n in names)   # section removed
     assert any("Kp ≥ 4" in n for n in names)
@@ -32,17 +32,25 @@ def test_prediction_embed_no_crossref_section_but_keeps_kp_field(ship, grid, kp_
     assert "gi.alaska.edu/monitors/aurora-forecast" in viewline
 
 
-def test_prediction_embed_has_noaa_tonight_viewline_image_and_links(ship, grid, kp_rows):
-    e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
-    # NOAA Aurora Dashboard "tonight" viewline is the embedded image (predicted for the night,
-    # not GI's current-Kp-only Alaska map).
-    assert e.image.url == swpc.NOAA_VIEWLINE["tonight"]
-    viewline = next(f.value for f in e.fields if "viewline" in f.name.lower())
+def test_prediction_embed_attaches_viewline_bytes(ship, grid, kp_rows):
+    # Bytes are attached (attachment://) so each daily post keeps its own copy — embedding the
+    # static NOAA URL made Discord's media cache render one (often stale) image on every post.
+    e, f = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4,
+                                           viewline_img=b"\x89PNG_fake")
+    assert f is not None and f.filename == "tonight_viewline.png"
+    assert e.image.url == "attachment://tonight_viewline.png"
+    viewline = next(fl.value for fl in e.fields if "viewline" in fl.name.lower())
     assert swpc.NOAA_AURORA_DASHBOARD in viewline and "UAF GI forecast" in viewline
 
 
+def test_prediction_embed_url_fallback_when_no_bytes(ship, grid, kp_rows):
+    e, f = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
+    assert f is None
+    assert e.image.url == swpc.NOAA_VIEWLINE["tonight"]
+
+
 def test_prediction_embed_has_dark_hours_field(ship, grid, kp_rows):
-    e = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
+    e, _ = forecast.build_prediction_embed(ship, kp_rows, grid, "2026-06-23T16:07:00Z", 4)
     assert any("Dark hours" in f.name for f in e.fields)
 
 
@@ -77,10 +85,27 @@ def test_swpc_forecast_embed_url_fallback():
     assert e.image.url == swpc.NOAA_OVATION_IMAGE
 
 
-def test_noaa_viewline_embeds():
-    embeds = forecast.noaa_viewline_embeds()
-    assert len(embeds) == 2
-    urls = {e.image.url for e in embeds}
-    assert urls == set(swpc.NOAA_VIEWLINE.values())
+def test_noaa_viewline_embeds_attach_bytes():
+    imgs = {"tonight": b"png1", "tomorrow night": b"png2"}
+    embeds, files = forecast.noaa_viewline_embeds(imgs)
+    assert len(embeds) == 2 and len(files) == 2
+    assert {e.image.url for e in embeds} == {"attachment://tonight_viewline.png",
+                                             "attachment://tomorrow_night_viewline.png"}
+    assert {f.filename for f in files} == {"tonight_viewline.png", "tomorrow_night_viewline.png"}
     titles = " ".join(e.title for e in embeds).lower()
     assert "tonight" in titles and "tomorrow" in titles
+
+
+def test_noaa_viewline_embeds_url_fallback():
+    embeds, files = forecast.noaa_viewline_embeds(None)
+    assert files == []
+    assert {e.image.url for e in embeds} == set(swpc.NOAA_VIEWLINE.values())
+
+
+def test_noaa_viewline_embeds_partial_fallback():
+    # one fetch failed -> that embed falls back to the URL, the other still attaches
+    embeds, files = forecast.noaa_viewline_embeds({"tonight": b"png1", "tomorrow night": None})
+    assert len(files) == 1 and files[0].filename == "tonight_viewline.png"
+    urls = {e.image.url for e in embeds}
+    assert "attachment://tonight_viewline.png" in urls
+    assert swpc.NOAA_VIEWLINE["tomorrow night"] in urls

@@ -92,7 +92,8 @@ def build_observed_embed(ship: dict, observed_kp, grid: dict, obs_time) -> disco
 
 
 def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time,
-                           threshold: float, gi_daily: dict | None = None) -> discord.Embed:
+                           threshold: float, gi_daily: dict | None = None,
+                           viewline_img: bytes | None = None):
     lat, lon = ship.get("lat"), ship.get("lon")
     prob = swpc.aurora_prob_at(grid, lat, lon)
     peaks = swpc.predicted_peaks(kp_rows, top=3)
@@ -120,11 +121,18 @@ def build_prediction_embed(ship: dict, kp_rows: list[dict], grid: dict, obs_time
                 value=f"NOAA tonight's viewline below · {links}",
                 inline=False)
     # NOAA Aurora Dashboard "tonight" viewline: shows the night's predicted equatorward
-    # visibility line, unlike the GI Alaska map which only reflects the current Kp.
-    e.set_image(url=swpc.NOAA_VIEWLINE["tonight"])
+    # visibility line, unlike the GI Alaska map which only reflects the current Kp. Attached as
+    # bytes so each post keeps its own copy — the URL is static, and Discord's media cache
+    # renders one shared (often days-stale) image on every post that embeds the same URL.
+    file = None
+    if viewline_img:
+        file = discord.File(io.BytesIO(viewline_img), filename="tonight_viewline.png")
+        e.set_image(url="attachment://tonight_viewline.png")
+    else:
+        e.set_image(url=swpc.NOAA_VIEWLINE["tonight"])
     if obs_time:
         e.set_footer(text=f"OVATION obs {solar.local_str(obs_time, lat, lon)} · source: NOAA SWPC + mfphub AIS")
-    return e
+    return e, file
 
 
 def build_alert_embed(new_windows: list[dict], ship: dict, kp_rows: list[dict],
@@ -164,12 +172,23 @@ def swpc_forecast_embed(img_bytes: bytes | None = None):
     return e, None
 
 
-def noaa_viewline_embeds() -> list[discord.Embed]:
-    """NOAA SWPC static predicted-viewline images (tonight + tomorrow night) as image embeds."""
-    out = []
+def noaa_viewline_embeds(images: dict[str, bytes | None] | None = None):
+    """NOAA SWPC predicted-viewline images (tonight + tomorrow night) as image embeds.
+
+    Returns (embeds, files). `images` maps the NOAA_VIEWLINE label to fetched bytes; when bytes
+    are present the image is attached (each post keeps its own copy), otherwise the embed falls
+    back to the static URL (subject to Discord's shared media cache going stale).
+    """
+    embeds, files = [], []
     for label, url in swpc.NOAA_VIEWLINE.items():
         e = discord.Embed(title=f"NOAA predicted viewline — {label}",
                           url=swpc.NOAA_VIEWLINE_PAGE, color=0x3498DB)
-        e.set_image(url=url)
-        out.append(e)
-    return out
+        img = (images or {}).get(label)
+        if img:
+            filename = f"{label.replace(' ', '_')}_viewline.png"
+            files.append(discord.File(io.BytesIO(img), filename=filename))
+            e.set_image(url=f"attachment://{filename}")
+        else:
+            e.set_image(url=url)
+        embeds.append(e)
+    return embeds, files

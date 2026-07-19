@@ -55,8 +55,24 @@ async def fetch_kp_forecast(session: aiohttp.ClientSession) -> list[dict]:
 
 async def fetch_ovation_image(session: aiohttp.ClientSession) -> bytes | None:
     """Current SWPC OVATION aurora forecast image (N. hemisphere) as bytes; None on failure."""
+    return await _fetch_image(session, NOAA_OVATION_IMAGE)
+
+
+async def fetch_viewline_image(session: aiohttp.ClientSession, which: str) -> bytes | None:
+    """NOAA viewline forecast image ('tonight' / 'tomorrow night') as bytes; None on failure.
+
+    Fetched as bytes so posts attach the image: the viewline URLs are static and Discord's media
+    cache serves one (often days-stale) copy for every embed that references the same URL.
+    """
     try:
-        async with session.get(NOAA_OVATION_IMAGE, headers=HEADERS,
+        return await _fetch_image(session, NOAA_VIEWLINE[which])
+    except KeyError:
+        return None
+
+
+async def _fetch_image(session: aiohttp.ClientSession, url: str) -> bytes | None:
+    try:
+        async with session.get(url, headers=HEADERS,
                                timeout=aiohttp.ClientTimeout(total=30)) as r:
             r.raise_for_status()
             return await r.read()

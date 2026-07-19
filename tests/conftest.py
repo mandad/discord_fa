@@ -10,9 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # ---- fake aiohttp session/response ------------------------------------------------------------
 class FakeResp:
-    def __init__(self, *, json_data=None, text_data=None, status=200):
+    def __init__(self, *, json_data=None, text_data=None, body=None, status=200):
         self._json = json_data
         self._text = text_data
+        self._body = body
         self.status = status
 
     async def __aenter__(self):
@@ -30,6 +31,9 @@ class FakeResp:
 
     async def text(self):
         return self._text
+
+    async def read(self):
+        return self._body
 
 
 class FakeSession:

@@ -73,11 +73,13 @@ async def maybe_alert(kp_rows: list[dict], ship_data: dict):
     async with aiohttp.ClientSession() as s:
         gi_daily = await gi.fetch_daily(s)        # best-effort; {} on failure
         swpc_img = await swpc.fetch_ovation_image(s)  # best-effort; None on failure
+        viewline_imgs = {k: await swpc.fetch_viewline_image(s, k) for k in swpc.NOAA_VIEWLINE}
     embed = forecast.build_alert_embed(new, ship_data, kp_rows, gi_daily, config.KP_THRESHOLD)
     swpc_embed, swpc_file = forecast.swpc_forecast_embed(swpc_img)
+    nv_embeds, nv_files = forecast.noaa_viewline_embeds(viewline_imgs)
     # GI Alaska viewline (on the alert embed) + current SWPC OVATION map + NOAA tonight/tomorrow.
-    embeds = [embed, swpc_embed, *forecast.noaa_viewline_embeds()]
-    files = [swpc_file] if swpc_file else []
+    embeds = [embed, swpc_embed, *nv_embeds]
+    files = [f for f in [swpc_file, *nv_files] if f]
     await ch.send(content="@everyone", embeds=embeds, files=files,
                   allowed_mentions=discord.AllowedMentions(everyone=True))
     log.info("posted Kp alert for %d window(s)", len(new))
@@ -98,9 +100,11 @@ async def daily_prediction():
         if ch:
             async with aiohttp.ClientSession() as s:
                 gi_daily = await gi.fetch_daily(s)  # best-effort; {} on failure
-            embed = forecast.build_prediction_embed(ship_data, kp_rows, grid, obs_time,
-                                                    config.KP_THRESHOLD, gi_daily=gi_daily)
-            await ch.send(embed=embed)
+                viewline_img = await swpc.fetch_viewline_image(s, "tonight")  # best-effort; None on failure
+            embed, viewline_file = forecast.build_prediction_embed(
+                ship_data, kp_rows, grid, obs_time,
+                config.KP_THRESHOLD, gi_daily=gi_daily, viewline_img=viewline_img)
+            await ch.send(embed=embed, files=[viewline_file] if viewline_file else [])
             alerts.mark_daily_posted(config.STATE_PATH, local_date)
             log.info("posted daily prediction (AK date %s)", local_date)
         await maybe_alert(kp_rows, ship_data)

@@ -18,6 +18,18 @@ async def test_fetch_ovation_builds_grid(ovation_raw):
     assert len(grid) == 4
 
 
+async def test_fetch_viewline_image_returns_bytes():
+    s = FakeSession(FakeResp(body=b"\x89PNG_fake"))
+    img = await swpc.fetch_viewline_image(s, "tonight")
+    assert img == b"\x89PNG_fake"
+    assert s.requested == [swpc.NOAA_VIEWLINE["tonight"]]
+
+
+async def test_fetch_viewline_image_none_on_http_error():
+    img = await swpc.fetch_viewline_image(FakeSession(FakeResp(body=b"x", status=500)), "tonight")
+    assert img is None
+
+
 def test_latest_observed_kp(kp_rows):
     obs = swpc.latest_observed_kp(kp_rows)
     assert obs["kind"] == "observed"

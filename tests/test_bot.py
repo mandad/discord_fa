@@ -61,6 +61,10 @@ async def _run_alert(monkeypatch, tmp_path, kp_rows, ship):
     async def fake_img(_session):
         return b"\xff\xd8\xff_fake_jpeg"
     monkeypatch.setattr(bot.swpc, "fetch_ovation_image", fake_img)
+
+    async def fake_viewline(_session, which):
+        return b"\x89PNG_" + which.encode()
+    monkeypatch.setattr(bot.swpc, "fetch_viewline_image", fake_viewline)
     return ch
 
 
@@ -78,7 +82,10 @@ async def test_maybe_alert_sends_everyone_with_viewlines(monkeypatch, tmp_path, 
     assert all(e.image.url for e in embeds)
     assert "Alaska_" in embeds[0].image.url                       # GI viewline on the alert embed
     assert embeds[1].image.url == "attachment://swpc_aurora_forecast.jpg"  # SWPC map attached
-    assert len(sent["files"]) == 1                                # the attached SWPC image
+    # NOAA viewline images attached as bytes too (static URLs go stale in Discord's media cache)
+    assert embeds[2].image.url == "attachment://tonight_viewline.png"
+    assert embeds[3].image.url == "attachment://tomorrow_night_viewline.png"
+    assert len(sent["files"]) == 3                                # SWPC map + 2 NOAA viewlines
 
 
 async def test_maybe_alert_dedupes_second_call(monkeypatch, tmp_path, kp_rows, ship):
@@ -145,9 +152,7 @@ async def test_aurora_cmd_attaches_forecast_image_and_next_window(monkeypatch, k
     assert any("Next Kp" in f.name for f in sent["embeds"][0].fields)
 
 
-async def test_daily_posts_once_per_local_day(monkeypatch, tmp_path, kp_rows, grid, ship):
-    # Two fires on the same Alaska date (e.g. after a DAILY_POST_UTC change + restart) must
-    # produce a single daily post.
+async def _run_daily(monkeypatch, tmp_path, kp_rows, grid, ship, *, viewline_img):
     ch = FakeChannel()
     monkeypatch.setattr(bot, "_channel", lambda: ch)
     monkeypatch.setattr(config, "STATE_PATH", tmp_path / "state.json")
@@ -161,10 +166,39 @@ async def test_daily_posts_once_per_local_day(monkeypatch, tmp_path, kp_rows, gr
         return {}
     monkeypatch.setattr(bot.gi, "fetch_daily", fake_gi)
 
+    async def fake_viewline(_s, which):
+        return viewline_img
+    monkeypatch.setattr(bot.swpc, "fetch_viewline_image", fake_viewline)
+
     async def noop_alert(*a, **k):
         return None
     monkeypatch.setattr(bot, "maybe_alert", noop_alert)
+    return ch
 
+
+async def test_daily_posts_once_per_local_day(monkeypatch, tmp_path, kp_rows, grid, ship):
+    # Two fires on the same Alaska date (e.g. after a DAILY_POST_UTC change + restart) must
+    # produce a single daily post.
+    ch = await _run_daily(monkeypatch, tmp_path, kp_rows, grid, ship, viewline_img=b"\x89PNG_fake")
     await bot.daily_prediction()
     await bot.daily_prediction()   # same AK date -> deduped
     assert len(ch.sends) == 1
+
+
+async def test_daily_attaches_viewline_image(monkeypatch, tmp_path, kp_rows, grid, ship):
+    # The daily post must upload the viewline bytes (attachment://), not embed the static NOAA
+    # URL — Discord's media cache made every post show the same stale image otherwise.
+    ch = await _run_daily(monkeypatch, tmp_path, kp_rows, grid, ship, viewline_img=b"\x89PNG_fake")
+    await bot.daily_prediction()
+    sent = ch.sends[0]
+    assert sent["embed"].image.url == "attachment://tonight_viewline.png"
+    assert len(sent["files"]) == 1
+    assert sent["files"][0].filename == "tonight_viewline.png"
+
+
+async def test_daily_falls_back_to_url_when_fetch_fails(monkeypatch, tmp_path, kp_rows, grid, ship):
+    ch = await _run_daily(monkeypatch, tmp_path, kp_rows, grid, ship, viewline_img=None)
+    await bot.daily_prediction()
+    sent = ch.sends[0]
+    assert sent["embed"].image.url == bot.swpc.NOAA_VIEWLINE["tonight"]
+    assert sent["files"] == []
