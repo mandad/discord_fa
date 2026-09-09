@@ -1,7 +1,8 @@
 """Aurora forecast Discord bot for NOAA Ship Fairweather.
 
 - Daily loop  : posts the Kp / aurora *prediction* for the ship's position.
-- Hourly loop : posts *observed* conditions and checks the Kp >= threshold alert.
+- Hourly loop : posts *observed* conditions, pinging @everyone above 50% aurora probability,
+                and checks the Kp >= threshold alert.
 - /aurora     : on-demand current conditions for the ship's position.
 - Alert       : @everyone when a new forecast window reaches Kp >= KP_THRESHOLD (deduped).
 
@@ -127,7 +128,11 @@ async def hourly_observed():
             if ch:
                 observed = swpc.latest_observed_kp(kp_rows)
                 embed = forecast.build_observed_embed(ship_data, observed, grid, obs_time)
-                await ch.send(embed=embed)
+                if prob > 50:
+                    await ch.send(content="@everyone", embed=embed,
+                                  allowed_mentions=discord.AllowedMentions(everyone=True))
+                else:
+                    await ch.send(embed=embed)
                 log.info("posted hourly observed conditions (aurora %s%% >= %s%% at ship, dark)",
                          prob, config.MIN_AURORA_PCT)
         elif not dark:

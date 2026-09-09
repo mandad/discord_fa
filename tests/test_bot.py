@@ -4,6 +4,7 @@ Uses a fake channel to capture what the bot would send, and patches the network/
 alert path is deterministic.
 """
 import discord
+import pytest
 
 import bot
 import config
@@ -122,6 +123,29 @@ async def _run_hourly(monkeypatch, kp_rows, grid, ship, *, dark, prob):
 async def test_hourly_posts_when_dark_and_above_threshold(monkeypatch, kp_rows, grid, ship):
     ch = await _run_hourly(monkeypatch, kp_rows, grid, ship, dark=True, prob=80)
     assert len(ch.sends) == 1
+    assert ch.sends[0]["content"] == "@everyone"
+    assert ch.sends[0]["allowed_mentions"].everyone is True
+
+
+@pytest.mark.parametrize("prob", [1, 49, 50, 50.1])
+async def test_hourly_everyone_threshold(monkeypatch, kp_rows, grid, ship, prob):
+    monkeypatch.setattr(config, "MIN_AURORA_PCT", 1)
+    ch = await _run_hourly(monkeypatch, kp_rows, grid, ship, dark=True, prob=prob)
+    assert len(ch.sends) == 1
+    sent = ch.sends[0]
+    if prob > 50:
+        assert sent["content"] == "@everyone"
+        assert sent["allowed_mentions"].everyone is True
+    else:
+        assert "content" not in sent
+        assert "allowed_mentions" not in sent
+
+
+@pytest.mark.parametrize("prob", [0, None])
+async def test_hourly_no_post_for_low_or_missing_probability(monkeypatch, kp_rows, grid, ship, prob):
+    monkeypatch.setattr(config, "MIN_AURORA_PCT", 1)
+    ch = await _run_hourly(monkeypatch, kp_rows, grid, ship, dark=True, prob=prob)
+    assert ch.sends == []
 
 
 async def test_hourly_suppressed_in_daylight_even_if_high_prob(monkeypatch, kp_rows, grid, ship):
